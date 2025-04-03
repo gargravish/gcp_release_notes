@@ -33,9 +33,11 @@ else
   fi
   
   # Extract Gemini model
-  GEMINI_MODEL=$(grep "GEMINI_MODEL" backend/.env.prod | cut -d'=' -f2)
+  GEMINI_MODEL=$(grep "GEMINI_MODEL" backend/.env.prod | grep -v "#" | cut -d'=' -f2)
   if [ -z "$GEMINI_MODEL" ]; then
-    echo "WARNING: GEMINI_MODEL not found in backend/.env.prod, using standard model"
+    echo "WARNING: GEMINI_MODEL not found or empty in backend/.env.prod"
+    echo "Adding a default model to the environment"
+    echo "GEMINI_MODEL=gemini-1.5-pro" >> backend/.env.prod
     GEMINI_MODEL="gemini-1.5-pro"
   fi
   
@@ -60,6 +62,7 @@ docker stop $(docker ps -q --filter ancestor=gcp-release-notes-dashboard:local) 
 
 # Build the Docker image
 echo "Building Docker image with backend/.env.prod..."
+echo "Using GEMINI_MODEL: $GEMINI_MODEL"
 docker build \
   --build-arg BACKEND_ENV_FILE=backend/.env.prod \
   --build-arg GEMINI_API_KEY="$GEMINI_API_KEY" \

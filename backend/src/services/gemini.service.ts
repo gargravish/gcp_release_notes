@@ -10,8 +10,8 @@ export interface SummaryResult {
 
 export class GeminiService {
   private apiKey: string;
-  private model: string;
-  private baseUrl: string;
+  private model: string | undefined;
+  private baseUrl: string = 'https://generativelanguage.googleapis.com/v1'; // Default to v1 API
 
   constructor() {
     // Get the API key and model from environment config
@@ -21,29 +21,27 @@ export class GeminiService {
     this.model = config.vertexAI.model;
     
     // Determine API base URL based on model
-    if (this.model.startsWith('gemini-2.5-')) {
+    if (this.model?.startsWith('gemini-2.5-')) {
       // Experimental models may use beta version
       this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
       console.log('Using beta API endpoint for experimental model');
-    } else if (this.model.startsWith('gemini-2.0-')) {
+    } else if (this.model?.startsWith('gemini-2.0-')) {
       // Experimental models may use beta version
       this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
       console.log('Using beta API endpoint for experimental model');
-    } else {
-      // Standard models use stable v1
-      this.baseUrl = 'https://generativelanguage.googleapis.com/v1';
     }
+    // else: keep the default v1 URL
     
     // Log configuration on initialization
     console.log('Initializing Gemini service with:');
     console.log(`- API Key: ${this.apiKey ? '********' + this.apiKey.slice(-4) : 'NOT SET'}`);
-    console.log(`- Model: ${this.model}`);
+    console.log(`- Model: ${this.model || 'NOT SET'}`);
     console.log(`- Base URL: ${this.baseUrl}`);
   }
 
   // Helper methods for debugging
   getModelName(): string {
-    return this.model;
+    return this.model || 'NOT SET';
   }
 
   isApiKeyConfigured(): boolean {

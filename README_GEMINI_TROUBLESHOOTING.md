@@ -16,36 +16,81 @@ This error typically occurs when:
 
 The application has been updated to handle summary generation asynchronously without reloading the entire application.
 
-## Configuration Changes
+### 3. Docker Build TypeScript Errors
 
-### Updated API Key Configuration
+You might encounter TypeScript errors during Docker builds like:
+```
+src/services/gemini.service.ts:21:5: error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+```
 
-1. Make sure you have a valid Gemini API key in your `.env.prod` file:
+This typically happens when:
+- The GEMINI_MODEL environment variable is not properly set
+- TypeScript strict checking is detecting potential undefined values
+
+## Environment Variable Configuration
+
+The application is designed to **only** use environment variables for API key and model configuration. No hardcoded values are used.
+
+### Proper Configuration
+
+1. Make sure both GEMINI_API_KEY and GEMINI_MODEL are set in your `.env.prod` file:
 
 ```
 GEMINI_API_KEY=your_actual_api_key_here
+GEMINI_MODEL=gemini-1.5-pro
 ```
 
-2. Use one of the recommended Gemini models:
+2. Never use hardcoded values directly in code. All configuration should come from the .env file.
 
-```
-# Choose one of these models:
-GEMINI_MODEL=gemini-2.0-flash
-#GEMINI_MODEL=gemini-2.5-pro-exp-03-25
+3. Use the provided scripts to manage environment variables:
+
+```bash
+# To update your API key and model
+./scripts/update_api_key.sh --key=YOUR_API_KEY --model=gemini-1.5-pro
+
+# To verify your environment variables are properly set
+./scripts/verify_env.sh
 ```
 
-### Network Configuration
+### Docker Build Configuration
+
+When building with Docker, make sure to:
+
+1. Pass the Gemini API key and model as build arguments:
+
+```bash
+docker build \
+  --build-arg GEMINI_API_KEY=your_api_key \
+  --build-arg GEMINI_MODEL=gemini-1.5-pro \
+  -t gcp-release-notes-dashboard:local .
+```
+
+2. Use the build-and-run.sh script which automatically handles environment variables:
+
+```bash
+./build-and-run.sh
+```
+
+### Recommended Gemini Models
+
+Use one of these recommended models:
+- `gemini-1.5-pro` - Stable, widely available model
+- `gemini-2.0-flash` - Fast, newer model for quick responses
+- `gemini-2.5-pro-exp-03-25` - Experimental preview model
+
+## Network Configuration
 
 Ensure that your Google Cloud Compute Engine VM:
 - Has the necessary IAM permissions to access the Gemini API
 - Has outbound internet access to `*.googleapis.com` domains
 - Is not blocked by a firewall or proxy
 
-### API Errors & Debugging
+## API Errors & Debugging
 
 The application now provides improved error messages in the logs:
 - Check VM logs using `sudo journalctl -u your-service-name -f` 
 - Look for specific error responses like 403 (permission denied) or 404 (model not found)
+- Check for messages indicating missing environment variables
 
 ## Deployment Steps
 
@@ -57,6 +102,9 @@ cd /path/to/Data_Dashboard
 
 # Pull the latest changes
 git pull
+
+# Verify environment variables
+./scripts/verify_env.sh
 
 # Rebuild the application
 npm run build
