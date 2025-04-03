@@ -2,6 +2,17 @@
 
 This guide provides step-by-step instructions for deploying the unified GCP Release Notes Dashboard to Google Cloud Run or Google Compute Engine (GCE).
 
+## Machine Portability
+
+The application has been designed to be fully portable and machine-agnostic:
+
+- **Relative URLs**: All asset and API URLs use relative paths
+- **No hardcoded IPs**: No reliance on specific IP addresses or domains
+- **Self-contained**: Backend serves frontend assets from the same origin
+- **Cross-environment consistency**: Works the same in local, VM, and cloud environments
+
+This means you can deploy the application on any machine or cloud service without modification, and it will automatically adapt to whatever hostname or IP address is used to access it.
+
 ## Prerequisites
 
 1. **Google Cloud Platform Account**

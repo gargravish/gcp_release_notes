@@ -1,6 +1,6 @@
 import { ReleaseNotesResponse, MetaResponse, ApiError } from '../types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5173';
+const API_BASE_URL = '/api';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -23,18 +23,18 @@ export const api = {
     if (params.products?.length) searchParams.set('products', params.products.join(','));
     if (params.summarize !== undefined) searchParams.set('summarize', String(params.summarize));
 
-    const response = await fetch(`${API_BASE_URL}/api/release-notes?${searchParams}`);
+    const response = await fetch(`${API_BASE_URL}/release-notes?${searchParams}`);
     return handleResponse<ReleaseNotesResponse>(response);
   },
 
   async getDistinctProducts(): Promise<string[]> {
-    const response = await fetch(`${API_BASE_URL}/api/meta/products`);
+    const response = await fetch(`${API_BASE_URL}/meta/products`);
     const data = await handleResponse<MetaResponse>(response);
     return data.products || [];
   },
 
   async getDistinctTypes(): Promise<string[]> {
-    const response = await fetch(`${API_BASE_URL}/api/meta/types`);
+    const response = await fetch(`${API_BASE_URL}/meta/types`);
     const data = await handleResponse<MetaResponse>(response);
     return data.types || [];
   },
