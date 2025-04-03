@@ -9,8 +9,8 @@ export class BigQueryService {
 
   constructor() {
     this.bigquery = new BigQuery({
-      projectId: config.projectId,
-      keyFilename: config.keyFilename,
+      projectId: config.googleCloud.projectId,
+      keyFilename: config.googleCloud.credentials,
     });
     this.dataset = config.bigquery.dataset;
     this.table = config.bigquery.table;

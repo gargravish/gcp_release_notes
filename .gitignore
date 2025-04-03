@@ -1,4 +1,56 @@
+# Documentation (optional exclusions)
 planning_doc.md
 CHANGELOG.md
-backend/.env
-frontend/.env
+
+# Environment files and secrets
+.env
+.env.*
+*/.env
+*/.env.*
+**/.env
+**/.env.*
+*.env
+backend/.env*
+frontend/.env*
+.secret
+*.secret
+secrets/
+**/secrets/
+
+# Google Cloud credentials and keys
+*-credentials.json
+*credentials*.json
+*key*.json
+**/service-account*.json
+**/application_default_credentials.json
+**/*-sa-*.json
+
+# Build and output directories
+**/dist/
+**/build/
+**/out/
+public/
+backend/public/
+coverage/
+
+# Dependency directories
+node_modules/
+**/node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
