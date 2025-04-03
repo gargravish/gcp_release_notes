@@ -18,11 +18,15 @@ RUN cd frontend && npm install
 COPY . .
 
 # Use a build arg to specify the environment file to use
-ARG BACKEND_ENV_FILE=backend/.env.example
+ARG BACKEND_ENV_FILE=backend/.env.prod
 ARG FRONTEND_ENV_FILE=frontend/.env.example
 
+# Print debug information about environment files
+RUN echo "Checking for backend env file: $BACKEND_ENV_FILE"
+RUN if [ -f "$BACKEND_ENV_FILE" ]; then echo "Backend env file exists"; else echo "Backend env file does not exist"; fi
+
 # Copy environment files if they exist and are different from the default destination
-RUN if [ -f "$BACKEND_ENV_FILE" ] && [ "$BACKEND_ENV_FILE" != "backend/.env" ]; then cp $BACKEND_ENV_FILE backend/.env; fi
+RUN if [ -f "$BACKEND_ENV_FILE" ] && [ "$BACKEND_ENV_FILE" != "backend/.env" ]; then cp $BACKEND_ENV_FILE backend/.env; echo "Copied $BACKEND_ENV_FILE to backend/.env"; cat backend/.env | grep BIGQUERY; fi
 RUN if [ -f "$FRONTEND_ENV_FILE" ] && [ "$FRONTEND_ENV_FILE" != "frontend/.env" ]; then cp $FRONTEND_ENV_FILE frontend/.env; fi
 
 # Build frontend (using no-check to bypass TypeScript errors for now)
@@ -53,11 +57,12 @@ RUN npm install --only=production
 COPY --from=build /usr/src/app/backend/dist ./dist
 COPY --from=build /usr/src/app/backend/public ./public
 
-# Create a dummy .env file if none exists in the build
-RUN touch /usr/src/app/.env
+# Copy .env file explicitly
+COPY --from=build /usr/src/app/backend/.env ./.env
+RUN echo "Checking environment in final image:" && cat .env | grep BIGQUERY
 
 # Expose port
 EXPOSE 5173
 
-# Start the application with explicit host binding
-CMD ["node", "dist/index.js", "--host", "0.0.0.0"] 
+# Start the application with explicit host binding and log environment variables
+CMD ["sh", "-c", "env | grep BIGQUERY && node dist/index.js --host 0.0.0.0"] 
