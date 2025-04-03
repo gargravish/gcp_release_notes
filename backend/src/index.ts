@@ -11,10 +11,29 @@ const app = express();
 const controller = new ReleaseNotesController();
 
 // Middleware
-app.use(helmet());
-app.use(cors({
-  origin: config.cors.allowedOrigins,
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "http:", "https:"],
+    }
+  }
 }));
+
+// Configure CORS more permissively for development
+app.use(cors({
+  origin: true, // Allow all origins temporarily
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Rate limiting
