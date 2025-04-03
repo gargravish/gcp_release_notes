@@ -37,7 +37,7 @@ const defaultFilters: FilterState = {
   timeframe: '7d',
   types: ['FEATURE', 'SERVICE_ANNOUNCEMENT'],
   products: ['BigQuery', 'Cloud Composer', 'Pub/Sub', 'Dataflow', 'Dataproc'],
-  summarize: true,
+  summarize: false,
 };
 
 export const useStore = create<StoreState>((set) => ({

@@ -16,13 +16,29 @@ export class GeminiService {
   constructor() {
     // Get the API key and model from environment config
     this.apiKey = config.vertexAI.apiKey || '';
-    this.model = config.vertexAI.model || 'gemini-pro';
-    this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+    
+    // Get model from config, which has already been validated
+    this.model = config.vertexAI.model;
+    
+    // Determine API base URL based on model
+    if (this.model.startsWith('gemini-2.5-')) {
+      // Experimental models may use beta version
+      this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+      console.log('Using beta API endpoint for experimental model');
+    } else if (this.model.startsWith('gemini-2.0-')) {
+      // Experimental models may use beta version
+      this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+      console.log('Using beta API endpoint for experimental model');
+    } else {
+      // Standard models use stable v1
+      this.baseUrl = 'https://generativelanguage.googleapis.com/v1';
+    }
     
     // Log configuration on initialization
     console.log('Initializing Gemini service with:');
     console.log(`- API Key: ${this.apiKey ? '********' + this.apiKey.slice(-4) : 'NOT SET'}`);
     console.log(`- Model: ${this.model}`);
+    console.log(`- Base URL: ${this.baseUrl}`);
   }
 
   private formatReleaseNotes(notes: ReleaseNote[]): string {
@@ -88,40 +104,64 @@ IMPORTANT GUIDELINES:
       const endpoint = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
       
       console.log(`Sending request to Gemini API at ${endpoint.replace(this.apiKey, '***')}`);
+      console.log('Using model:', this.model);
       
-      const response = await axios.post(endpoint, {
-        contents: [{
-          role: 'user',
-          parts: [{
-            text: prompt
-          }]
-        }],
+      // Simplified request format for better compatibility
+      const requestPayload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ],
         generationConfig: {
-          maxOutputTokens: 2048,
           temperature: 0.2,
           topP: 0.8,
-          topK: 40
+          topK: 40,
+          maxOutputTokens: 2048
         }
-      });
+      };
+      
+      console.log('Request payload structure:', JSON.stringify(requestPayload, (key, value) => {
+        // Mask the actual prompt content for security
+        if (key === 'text' && typeof value === 'string' && value.length > 100) {
+          return value.substring(0, 100) + '... [truncated]';
+        }
+        return value;
+      }, 2));
+      
+      const response = await axios.post(endpoint, requestPayload);
       
       console.log('Received response from Gemini API:', response.status);
+      console.log('Response data structure:', JSON.stringify(response.data, null, 2));
       
-      if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
-        console.error('Invalid response format:', JSON.stringify(response.data));
-        throw new Error('Invalid response format from Gemini API');
+      if (!response.data) {
+        console.error('Empty response from Gemini API');
+        throw new Error('Empty response from Gemini API');
       }
       
-      const candidate = response.data.candidates[0];
-      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-        console.error('No content in response:', JSON.stringify(candidate));
-        throw new Error('No content in response from Gemini API');
-      }
+      // Handle different response formats
+      let text = '';
       
-      const text = candidate.content.parts[0].text;
+      if (response.data.candidates && response.data.candidates.length > 0) {
+        const candidate = response.data.candidates[0];
+        
+        // Try to extract text based on different possible response formats
+        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+          text = candidate.content.parts[0].text || '';
+        } else if (candidate.text) {
+          text = candidate.text;
+        } else if (candidate.output) {
+          text = candidate.output;
+        }
+      } else if (response.data.text) {
+        text = response.data.text;
+      }
       
       if (!text) {
-        console.error('No text generated in response');
-        throw new Error('No text generated from Gemini API');
+        console.error('No text found in response:', JSON.stringify(response.data));
+        throw new Error('Could not extract text from the Gemini API response');
       }
       
       console.log('Successfully received text response');
@@ -139,6 +179,14 @@ IMPORTANT GUIDELINES:
       console.error('Error generating summary:', error);
       if (axios.isAxiosError(error)) {
         console.error('Axios error details:', error.response?.data);
+        
+        // Log the complete error for debugging
+        console.error('Full error object:', JSON.stringify({
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          headers: error.response?.headers,
+          data: error.response?.data
+        }, null, 2));
       }
       throw new Error(`Failed to generate summary using Gemini: ${error instanceof Error ? error.message : String(error)}`);
     }

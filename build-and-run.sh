@@ -35,9 +35,23 @@ else
   # Extract Gemini model
   GEMINI_MODEL=$(grep "GEMINI_MODEL" backend/.env.prod | cut -d'=' -f2)
   if [ -z "$GEMINI_MODEL" ]; then
-    echo "WARNING: GEMINI_MODEL not found in backend/.env.prod, using default"
-    GEMINI_MODEL="gemini-2.5-pro-exp-03-25"
+    echo "WARNING: GEMINI_MODEL not found in backend/.env.prod, using standard model"
+    GEMINI_MODEL="gemini-1.5-pro"
   fi
+  
+  # Validate Gemini model
+  case "$GEMINI_MODEL" in
+    # Standard models
+    "gemini-1.5-pro"|"gemini-1.5-flash"|"gemini-1.0-pro"|"gemini-pro"|"gemini-pro-vision"|\
+    # Experimental models
+    "gemini-2.5-pro-exp-03-25"|"gemini-2.0-flash")
+      echo "Using Gemini model: $GEMINI_MODEL"
+      ;;
+    *)
+      echo "WARNING: '$GEMINI_MODEL' might not be a valid model name, but we'll try to use it anyway."
+      echo "If you encounter errors, try falling back to a standard model like gemini-1.5-pro"
+      ;;
+  esac
 fi
 
 # Stop any running containers
