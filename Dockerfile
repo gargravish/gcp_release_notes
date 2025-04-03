@@ -57,7 +57,7 @@ COPY --from=build /usr/src/app/backend/public ./public
 RUN touch /usr/src/app/.env
 
 # Expose port
-EXPOSE 8080
+EXPOSE 5173
 
 # Start the application
 CMD ["node", "dist/index.js"] 

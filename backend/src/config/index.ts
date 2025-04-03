@@ -16,7 +16,7 @@ export const config = {
     model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
   },
   server: {
-    port: parseInt(process.env.PORT || '3001', 10),
+    port: parseInt(process.env.PORT || '5173', 10),
     environment: process.env.NODE_ENV || 'development',
   },
   cors: {

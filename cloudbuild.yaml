@@ -21,6 +21,8 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      - '--port'
+      - '5173'
   
   # Create a latest tag
   - name: 'gcr.io/cloud-builders/docker'

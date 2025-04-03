@@ -57,7 +57,7 @@ gcloud auth configure-docker
 2. Edit the `backend/.env.prod` file with your production values:
    ```
    # Server configuration
-   PORT=8080
+   PORT=5173
    NODE_ENV=production
 
    # CORS configuration (no longer needed for cross-origin requests since frontend and backend are served together)
@@ -114,7 +114,7 @@ npm run build
 npm start
 ```
 
-Your application should now be running at http://localhost:8080.
+Your application should now be running at http://localhost:5173.
 
 ### 3.3 Test Docker Build
 ```bash
@@ -122,10 +122,10 @@ Your application should now be running at http://localhost:8080.
 docker build -t gcp-release-notes-dashboard:local .
 
 # Run the Docker image
-docker run -p 8080:8080 gcp-release-notes-dashboard:local
+docker run -p 5173:5173 gcp-release-notes-dashboard:local
 ```
 
-Visit http://localhost:8080 to verify that the application is working correctly.
+Visit http://localhost:5173 to verify that the application is working correctly.
 
 ## Step 4: Deploy to Google Cloud Run
 
@@ -163,7 +163,7 @@ Visit http://localhost:8080 to verify that the application is working correctly.
      --cpu=1 \
      --min-instances=0 \
      --max-instances=10 \
-     --port=8080
+     --port=5173
    ```
 
 ### 4.2 Automated Deployment with Cloud Build
@@ -210,7 +210,7 @@ gcloud compute instances create gcp-release-notes-dashboard \
 # Create a firewall rule to allow HTTP traffic
 gcloud compute firewall-rules create allow-http \
   --action=ALLOW \
-  --rules=tcp:8080 \
+  --rules=tcp:5173 \
   --source-ranges=0.0.0.0/0 \
   --target-tags=http-server
 ```
@@ -282,7 +282,7 @@ nano frontend/.env.production
 docker build -t gcp-release-notes-dashboard:latest .
 
 # Run the container
-docker run -d -p 8080:8080 gcp-release-notes-dashboard:latest
+docker run -d -p 5173:5173 gcp-release-notes-dashboard:latest
 ```
 
 ### 5.6 Set Up a Startup Script (Optional)
@@ -362,7 +362,7 @@ jobs:
       run: |
         # Create backend .env.prod file (replace with your actual config or use secrets)
         cat <<EOF > backend/.env.prod
-        PORT=8080
+        PORT=5173
         NODE_ENV=production
         GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}
         BIGQUERY_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
@@ -427,7 +427,7 @@ jobs:
 4. **Cloud Run Deployment Failures**
    - Verify service account permissions
    - Check for quota limitations
-   - Ensure the container port (8080) matches the port your application listens on
+   - Ensure the container port (5173) matches the port your application listens on
 
 5. **API Connection Issues**
    - Verify that BigQuery and Vertex AI APIs are enabled
@@ -478,7 +478,7 @@ npm start
 # Manual deployment
 docker build -t gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest .
 docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
-gcloud run deploy gcp-release-notes-dashboard --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest --region=us-central1 --platform=managed --allow-unauthenticated
+gcloud run deploy gcp-release-notes-dashboard --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest --region=us-central1 --platform=managed --allow-unauthenticated --port=5173
 
 # Cloud Build deployment
 gcloud builds submit --config=cloudbuild.yaml .
