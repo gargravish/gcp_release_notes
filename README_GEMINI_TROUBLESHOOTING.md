@@ -12,6 +12,13 @@ This error typically occurs when:
 - Network connectivity issues between your server and the Gemini API
 - API rate limiting or quota issues
 
+#### Model Fallback System
+
+The application now includes an automatic fallback system for experimental models:
+- If an experimental model (like gemini-2.5-pro-exp-03-25) fails with an empty response
+- The system will automatically retry with gemini-1.5-pro
+- This happens transparently without requiring user intervention
+
 ### 2. Application Reloads When Generating Summary
 
 The application has been updated to handle summary generation asynchronously without reloading the entire application.
@@ -73,10 +80,13 @@ docker build \
 
 ### Recommended Gemini Models
 
-Use one of these recommended models:
-- `gemini-1.5-pro` - Stable, widely available model
-- `gemini-2.0-flash` - Fast, newer model for quick responses
-- `gemini-2.5-pro-exp-03-25` - Experimental preview model
+Use one of these recommended models in order of stability:
+- `gemini-1.5-pro` - Most stable, widely available model (**recommended for production**)
+- `gemini-1.0-pro` - Legacy stable model
+- `gemini-2.0-flash` - Fast, newer model but may be less stable
+- `gemini-2.5-pro-exp-03-25` - Experimental preview model (may produce empty responses)
+
+**Note:** When using experimental models, the application will automatically fall back to gemini-1.5-pro if they fail to generate text.
 
 ## Network Configuration
 

@@ -43,9 +43,13 @@ else
   
   # Validate Gemini model
   case "$GEMINI_MODEL" in
-    # Standard models
     "gemini-1.5-pro"|"gemini-1.5-flash"|"gemini-1.0-pro"|"gemini-pro"|"gemini-pro-vision"|"gemini-2.5-pro-exp-03-25"|"gemini-2.0-flash")
       echo "Using Gemini model: $GEMINI_MODEL"
+      # Add a note for experimental models
+      if [[ "$GEMINI_MODEL" == *"gemini-2"* ]] || [[ "$GEMINI_MODEL" == *"-exp-"* ]] || [[ "$GEMINI_MODEL" == *"-preview-"* ]]; then
+        echo "Note: $GEMINI_MODEL is an experimental model which may be unstable."
+        echo "The application will automatically fall back to gemini-1.5-pro if this model fails."
+      fi
       ;;
     *)
       echo "WARNING: '$GEMINI_MODEL' might not be a valid model name, but we'll try to use it anyway."

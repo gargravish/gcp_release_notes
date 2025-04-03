@@ -14,29 +14,61 @@ export class GeminiService {
   private baseUrl: string = 'https://generativelanguage.googleapis.com/v1'; // Default to v1 API
 
   constructor() {
-    // Get the API key and model from environment config
-    this.apiKey = config.vertexAI.apiKey || '';
-    
-    // Get model from config, which has already been validated
-    this.model = config.vertexAI.model;
-    
-    // Determine API base URL based on model
-    if (this.model?.startsWith('gemini-2.5-')) {
-      // Experimental models may use beta version
-      this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-      console.log('Using beta API endpoint for experimental model');
-    } else if (this.model?.startsWith('gemini-2.0-')) {
-      // Experimental models may use beta version
-      this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-      console.log('Using beta API endpoint for experimental model');
+    try {
+      // Get the API key and model from environment config
+      this.apiKey = config.vertexAI.apiKey || '';
+      
+      // Get model from config, which has already been validated
+      this.model = config.vertexAI.model;
+      
+      // Determine API base URL based on model
+      if (this.model?.startsWith('gemini-2.5-')) {
+        // Experimental models may use beta version
+        this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+        console.log('Using beta API endpoint for experimental model');
+      } else if (this.model?.startsWith('gemini-2.0-')) {
+        // Experimental models may use beta version
+        this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+        console.log('Using beta API endpoint for experimental model');
+      }
+      // else: keep the default v1 URL
+      
+      // Log configuration on initialization
+      console.log('Initializing Gemini service with:');
+      console.log(`- API Key: ${this.apiKey ? '********' + this.apiKey.slice(-4) : 'NOT SET'}`);
+      console.log(`- Model: ${this.model || 'NOT SET'}`);
+      console.log(`- Base URL: ${this.baseUrl}`);
+      
+      // Validate the configuration
+      this.validateConfiguration();
+    } catch (error) {
+      console.error('Error initializing Gemini service:', error);
+      console.error('AI summarization will not be available');
     }
-    // else: keep the default v1 URL
+  }
+
+  private validateConfiguration(): void {
+    // Check for API key
+    if (!this.apiKey) {
+      console.warn('GEMINI_API_KEY is not set. AI summarization will not work.');
+      console.warn('Set GEMINI_API_KEY in your environment or .env file.');
+    } else if (this.apiKey === 'YOUR_API_KEY_HERE') {
+      console.warn('GEMINI_API_KEY contains a placeholder value. AI summarization will not work.');
+      console.warn('Replace the placeholder with your actual API key.');
+    }
     
-    // Log configuration on initialization
-    console.log('Initializing Gemini service with:');
-    console.log(`- API Key: ${this.apiKey ? '********' + this.apiKey.slice(-4) : 'NOT SET'}`);
-    console.log(`- Model: ${this.model || 'NOT SET'}`);
-    console.log(`- Base URL: ${this.baseUrl}`);
+    // Check for model
+    if (!this.model) {
+      console.warn('GEMINI_MODEL is not set. Using default model gemini-1.5-pro.');
+      this.model = 'gemini-1.5-pro';
+    }
+    
+    // Log configuration status
+    if (this.isApiKeyConfigured() && this.model) {
+      console.log('Gemini service is properly configured and ready to use.');
+    } else {
+      console.warn('Gemini service is not properly configured. AI summarization will be disabled.');
+    }
   }
 
   // Helper methods for debugging
@@ -98,6 +130,45 @@ IMPORTANT GUIDELINES:
   }
 
   async generateSummary(notes: ReleaseNote[]): Promise<SummaryResult> {
+    // Check if the service is properly configured
+    if (!this.isApiKeyConfigured()) {
+      throw new Error('Gemini API key is not properly configured. Please set GEMINI_API_KEY in your .env file.');
+    }
+
+    // Try primary model first, then fall back to standard model if needed
+    try {
+      return await this.generateSummaryWithModel(notes, this.model);
+    } catch (error) {
+      // If using an experimental model and it failed, try falling back to a stable one
+      if (this.isExperimentalModel(this.model) && 
+          error instanceof Error && 
+          error.message.includes('Could not extract text')) {
+        
+        console.log(`Experimental model ${this.model} failed with empty response. Falling back to gemini-1.5-pro...`);
+        return await this.generateSummaryWithModel(notes, 'gemini-1.5-pro');
+      }
+      
+      // Handle axios not being installed
+      if (error instanceof Error && error.message.includes('Cannot find module')) {
+        console.error('Missing dependency:', error.message);
+        throw new Error('Backend dependency missing. Please run "cd backend && npm install" to install required dependencies.');
+      }
+      
+      // Re-throw the original error if fallback isn't applicable
+      throw error;
+    }
+  }
+
+  // Helper to check if a model is experimental
+  private isExperimentalModel(model?: string): boolean {
+    if (!model) return false;
+    return model.startsWith('gemini-2.') || 
+           model.includes('-exp-') || 
+           model.includes('-preview-');
+  }
+
+  // Actual implementation of the summary generation with a specific model
+  private async generateSummaryWithModel(notes: ReleaseNote[], modelToUse?: string): Promise<SummaryResult> {
     try {
       console.log('Starting to generate summary with direct API...');
       
@@ -107,18 +178,24 @@ IMPORTANT GUIDELINES:
       }
       
       // Strict validation for model
-      if (!this.model) {
+      if (!modelToUse) {
         throw new Error('Gemini model is not configured. Please set GEMINI_MODEL in your .env file.');
       }
       
-      // Log the model and URL for debugging
-      console.log(`Using Gemini model: ${this.model}`);
-      console.log(`Using baseUrl: ${this.baseUrl}`);
+      // Determine API base URL for the specific model
+      let apiBaseUrl = 'https://generativelanguage.googleapis.com/v1';
+      if (modelToUse.startsWith('gemini-2.') || modelToUse.includes('-exp-') || modelToUse.includes('-preview-')) {
+        apiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+        console.log(`Using beta API endpoint for experimental model ${modelToUse}`);
+      }
+      
+      console.log(`Using Gemini model: ${modelToUse}`);
+      console.log(`Using baseUrl: ${apiBaseUrl}`);
       
       const prompt = this.createPrompt(notes);
       
       // Use Axios to call the Gemini API directly
-      const endpoint = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+      const endpoint = `${apiBaseUrl}/models/${modelToUse}:generateContent?key=${this.apiKey}`;
       
       console.log(`Sending request to Gemini API at ${endpoint.replace(this.apiKey, '***')}`);
       
@@ -175,6 +252,7 @@ IMPORTANT GUIDELINES:
       }
       
       if (!text) {
+        // Log the complete response for debugging
         console.error('Could not extract text from response:', JSON.stringify(response.data, null, 2));
         throw new Error('Could not extract text from the Gemini API response');
       }
@@ -191,7 +269,7 @@ IMPORTANT GUIDELINES:
         industryUseCases,
       };
     } catch (error) {
-      console.error('Error generating summary:', error);
+      console.error('Error generating summary with model', modelToUse, ':', error);
       if (axios.isAxiosError(error)) {
         console.error('Axios error details:', {
           status: error.response?.status,
@@ -206,7 +284,7 @@ IMPORTANT GUIDELINES:
         if (error.response?.status === 403) {
           throw new Error('Access denied: API key may be invalid or lacks permissions for the specified model');
         } else if (error.response?.status === 404) {
-          throw new Error(`Model not found: "${this.model}" may not be available or correctly specified`);
+          throw new Error(`Model not found: "${modelToUse}" may not be available or correctly specified`);
         } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
           throw new Error('Network error: Unable to connect to the Gemini API');
         } else if (error.code === 'ETIMEDOUT') {

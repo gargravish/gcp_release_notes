@@ -12,16 +12,19 @@ console.log('GEMINI_MODEL:', process.env.GEMINI_MODEL || 'Not set');
 
 // Define valid Gemini models 
 const VALID_GEMINI_MODELS = [
-  // Core models
+  // Core models - always stable
   'gemini-1.5-pro',
   'gemini-1.5-flash',
   'gemini-1.0-pro',
   'gemini-pro',
   'gemini-pro-vision',
-  // Experimental models
+  // Experimental models - may have issues
   'gemini-2.5-pro-exp-03-25',
   'gemini-2.0-flash'
 ];
+
+// Define stable fallback model
+const FALLBACK_MODEL = 'gemini-1.5-pro';
 
 // Check if Gemini API key is set
 if (!process.env.GEMINI_API_KEY) {
@@ -32,14 +35,17 @@ if (!process.env.GEMINI_API_KEY) {
 // Check if Gemini model is set
 if (!process.env.GEMINI_MODEL) {
   console.error('ERROR: GEMINI_MODEL is not set in environment variables');
-  console.error('Please specify a valid model in your .env file');
+  console.error(`Using default fallback model: ${FALLBACK_MODEL}`);
 }
 
 // Get model from environment without default fallback
-const geminiModel = process.env.GEMINI_MODEL;
+let geminiModel = process.env.GEMINI_MODEL;
 
-// Only validate the model if it's provided
-if (geminiModel) {
+// If model is not provided, use the fallback
+if (!geminiModel) {
+  console.warn(`No Gemini model specified - using default model: ${FALLBACK_MODEL}`);
+  geminiModel = FALLBACK_MODEL;
+} else {
   // Check if the specified model is in our valid list
   const isKnownModel = VALID_GEMINI_MODELS.includes(geminiModel);
 
@@ -54,11 +60,10 @@ if (geminiModel) {
   } else {
     console.log(`Using Gemini model: ${geminiModel}`);
     if (isExperimentalModel) {
-      console.log('Note: This is an experimental model and might have different API requirements.');
+      console.log(`Note: ${geminiModel} is an experimental model which may be unstable.`);
+      console.log(`If it fails, the app will fall back to ${FALLBACK_MODEL}.`);
     }
   }
-} else {
-  console.warn('No Gemini model specified - API calls will likely fail');
 }
 
 export const config = {
@@ -73,6 +78,7 @@ export const config = {
   vertexAI: {
     apiKey: process.env.GEMINI_API_KEY,
     model: geminiModel,
+    fallbackModel: FALLBACK_MODEL
   },
   server: {
     port: parseInt(process.env.PORT || '5173', 10),

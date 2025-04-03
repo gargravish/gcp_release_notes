@@ -2,6 +2,16 @@
 
 A modern, interactive web application that allows users to efficiently explore, filter, summarize, and understand Google Cloud Platform (GCP) release notes.
 
+## New for Local Development
+
+We've improved the local development experience! Follow our new [Local Development Guide](./LOCAL_DEVELOPMENT.md) for quick setup.
+
+```bash
+# Quick setup for local development
+npm run setup
+npm run dev
+```
+
 ## Features
 
 - **Interactive Filtering:**
@@ -141,4 +151,12 @@ npm start
 
 ## Contributors
 
-[Your Contributors Information] 
+[Your Contributors Information]
+
+## Documentation
+
+- [Local Development Guide](./LOCAL_DEVELOPMENT.md) - Setting up for local development
+- [Deployment Guide](./DEPLOYMENT.md) - Deploying to Google Cloud
+- [Frontend Deployment](./FRONTEND_DEPLOYMENT.md) - Dedicated frontend deployment guide
+- [Gemini API Troubleshooting](./README_GEMINI_TROUBLESHOOTING.md) - Help with AI summary feature
+- [Changelog](./CHANGELOG.md) - Version history and updates 
