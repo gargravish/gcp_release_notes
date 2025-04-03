@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { Box, Card, CardContent, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, Alert, Link, Button } from '@mui/material';
+import { Box, Card, CardContent, Typography, CircularProgress, Alert, Link, Button } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from '../store/useStore';
 import { api } from '../services/api';
@@ -8,13 +8,29 @@ import { api } from '../services/api';
 const SummaryTableContent = lazy(() => import('./SummaryTableContent'));
 
 export const Summary: React.FC = () => {
-  const { filters } = useStore();
+  const { filters, setFilters } = useStore();
 
-  const { data, isLoading, error, isFetching } = useQuery({
-    queryKey: ['releaseNotes', filters],
-    queryFn: () => api.getReleaseNotes(filters),
+  // Use a separate query key for summary to avoid reloading all data
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    isFetching,
+    refetch
+  } = useQuery({
+    queryKey: ['summaryOnly', filters],
+    queryFn: () => api.getReleaseNotes({...filters, summarize: true}),
     enabled: filters.summarize,
+    // Don't refetch on window focus to avoid unexpected reloads
+    refetchOnWindowFocus: false,
+    // Keep previous data while loading new data
+    keepPreviousData: true
   });
+
+  // Generate summary on demand rather than with filter toggle
+  const handleGenerateSummary = () => {
+    refetch();
+  };
 
   if (!filters.summarize) {
     return null;
@@ -23,9 +39,24 @@ export const Summary: React.FC = () => {
   // Error from API fetching
   if (error) {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        Failed to generate summary
-      </Alert>
+      <Card>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            AI Summary Error
+          </Typography>
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to generate summary: {error instanceof Error ? error.message : 'Unknown error'}
+          </Alert>
+          <Button 
+            variant="contained" 
+            onClick={handleGenerateSummary} 
+            sx={{ mt: 2 }}
+            disabled={isLoading || isFetching}
+          >
+            Retry Summary Generation
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -55,6 +86,14 @@ export const Summary: React.FC = () => {
               </Link> for more information
             </li>
           </Box>
+          <Button 
+            variant="contained" 
+            onClick={handleGenerateSummary} 
+            sx={{ mt: 2 }}
+            disabled={isLoading || isFetching}
+          >
+            Retry Summary Generation
+          </Button>
         </CardContent>
       </Card>
     );
@@ -63,28 +102,54 @@ export const Summary: React.FC = () => {
   const summary = data?.summary;
   if (!summary && !isLoading && !isFetching) {
     return (
-      <Alert severity="info" sx={{ mt: 2 }}>
-        No summary information available for the selected filters.
-      </Alert>
+      <Card>
+        <CardContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            No summary information available for the selected filters.
+          </Alert>
+          <Button 
+            variant="contained" 
+            onClick={handleGenerateSummary} 
+            disabled={isLoading || isFetching}
+          >
+            Generate Summary
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-          Industry Use Cases Analysis
-          {(isLoading || isFetching) && (
-            <CircularProgress size={20} sx={{ ml: 2 }} />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6">
+            Industry Use Cases Analysis
+          </Typography>
+          {(isLoading || isFetching) ? (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <CircularProgress size={20} sx={{ mr: 1 }} />
+              <Typography variant="body2" color="text.secondary">
+                Generating summary...
+              </Typography>
+            </Box>
+          ) : (
+            <Button 
+              variant="outlined" 
+              onClick={handleGenerateSummary} 
+              size="small"
+            >
+              Refresh Summary
+            </Button>
           )}
-        </Typography>
+        </Box>
         
         <Suspense fallback={
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>
         }>
-          {summary && (
+          {summary && !isLoading && (
             <SummaryTableContent summary={summary} />
           )}
         </Suspense>

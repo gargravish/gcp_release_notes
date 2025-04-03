@@ -43,7 +43,7 @@ export const Filters: React.FC = () => {
   };
 
   const handleSummarizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFilters({ ...filters, summarize: event.target.checked });
+    setFilters({ summarize: event.target.checked });
   };
 
   return (

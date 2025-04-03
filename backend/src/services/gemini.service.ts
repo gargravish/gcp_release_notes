@@ -98,13 +98,16 @@ IMPORTANT GUIDELINES:
         throw new Error('Gemini API key is not configured. Please check your environment variables.');
       }
       
+      // Log the model and URL for debugging
+      console.log(`Using Gemini model: ${this.model}`);
+      console.log(`Using baseUrl: ${this.baseUrl}`);
+      
       const prompt = this.createPrompt(notes);
       
       // Use Axios to call the Gemini API directly
       const endpoint = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
       
       console.log(`Sending request to Gemini API at ${endpoint.replace(this.apiKey, '***')}`);
-      console.log('Using model:', this.model);
       
       // Simplified request format for better compatibility
       const requestPayload = {
@@ -131,7 +134,12 @@ IMPORTANT GUIDELINES:
         return value;
       }, 2));
       
-      const response = await axios.post(endpoint, requestPayload);
+      const response = await axios.post(endpoint, requestPayload, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60 seconds timeout to prevent hanging requests
+      });
       
       console.log('Received response from Gemini API:', response.status);
       console.log('Response data structure:', JSON.stringify(response.data, null, 2));
@@ -178,15 +186,25 @@ IMPORTANT GUIDELINES:
     } catch (error) {
       console.error('Error generating summary:', error);
       if (axios.isAxiosError(error)) {
-        console.error('Axios error details:', error.response?.data);
-        
-        // Log the complete error for debugging
-        console.error('Full error object:', JSON.stringify({
+        console.error('Axios error details:', {
           status: error.response?.status,
-          statusText: error.response?.statusText,
-          headers: error.response?.headers,
-          data: error.response?.data
-        }, null, 2));
+          data: error.response?.data,
+          config: {
+            url: error.config?.url?.replace(this.apiKey, '***'),
+            method: error.config?.method,
+          }
+        });
+        
+        // Check for specific error types
+        if (error.response?.status === 403) {
+          throw new Error('Access denied: API key may be invalid or lacks permissions for the specified model');
+        } else if (error.response?.status === 404) {
+          throw new Error(`Model not found: "${this.model}" may not be available or correctly specified`);
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+          throw new Error('Network error: Unable to connect to the Gemini API');
+        } else if (error.code === 'ETIMEDOUT') {
+          throw new Error('Request timed out: The Gemini API took too long to respond');
+        }
       }
       throw new Error(`Failed to generate summary using Gemini: ${error instanceof Error ? error.message : String(error)}`);
     }
