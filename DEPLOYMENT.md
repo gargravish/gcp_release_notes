@@ -133,6 +133,14 @@ Visit http://localhost:8080 to verify that the application is working correctly.
 
 1. Build and push the Docker image to Google Container Registry:
    ```bash
+   # First, make sure your environment files exist
+   cp backend/.env.example backend/.env.prod
+   cp frontend/.env.example frontend/.env.production
+   
+   # Edit these files with your production settings
+   nano backend/.env.prod
+   nano frontend/.env.production
+   
    # Build the Docker image with production environment files
    docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
                 --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
@@ -141,6 +149,8 @@ Visit http://localhost:8080 to verify that the application is working correctly.
    # Push the image to Google Container Registry
    docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
    ```
+
+   > **Note:** If you encounter errors about copying files to themselves, ensure you're using the correct environment file paths that are different from the default destination paths.
 
 2. Deploy to Cloud Run:
    ```bash
@@ -404,6 +414,12 @@ jobs:
    - Verify that the Dockerfile is correctly copying these files
 
 3. **Container Build Failures**
+   - **Same File Copy Error**: If you see an error like `cp: 'backend/.env' and 'backend/.env' are the same file`, it means your Docker build arguments are pointing to the same file as the destination. Make sure you use different file paths:
+     ```bash
+     docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+                  --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
+                  -t gcp-release-notes-dashboard:local .
+     ```
    - Check Docker errors in the build logs
    - Ensure all files are included in the Docker build context
    - Verify NODE_ENV is set to production for the production build

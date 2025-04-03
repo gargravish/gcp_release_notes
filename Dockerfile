@@ -18,12 +18,12 @@ RUN cd frontend && npm install
 COPY . .
 
 # Use a build arg to specify the environment file to use
-ARG BACKEND_ENV_FILE=backend/.env
-ARG FRONTEND_ENV_FILE=frontend/.env
+ARG BACKEND_ENV_FILE=backend/.env.example
+ARG FRONTEND_ENV_FILE=frontend/.env.example
 
-# Copy environment files if they exist
-RUN if [ -f "$BACKEND_ENV_FILE" ]; then cp $BACKEND_ENV_FILE backend/.env; fi
-RUN if [ -f "$FRONTEND_ENV_FILE" ]; then cp $FRONTEND_ENV_FILE frontend/.env; fi
+# Copy environment files if they exist and are different from the default destination
+RUN if [ -f "$BACKEND_ENV_FILE" ] && [ "$BACKEND_ENV_FILE" != "backend/.env" ]; then cp $BACKEND_ENV_FILE backend/.env; fi
+RUN if [ -f "$FRONTEND_ENV_FILE" ] && [ "$FRONTEND_ENV_FILE" != "frontend/.env" ]; then cp $FRONTEND_ENV_FILE frontend/.env; fi
 
 # Build frontend (using no-check to bypass TypeScript errors for now)
 RUN cd frontend && npm run build:no-check
@@ -53,8 +53,8 @@ RUN npm install --only=production
 COPY --from=build /usr/src/app/backend/dist ./dist
 COPY --from=build /usr/src/app/backend/public ./public
 
-# Copy .env file
-COPY --from=build /usr/src/app/backend/.env ./.env
+# Create a dummy .env file if none exists in the build
+RUN touch /usr/src/app/.env
 
 # Expose port
 EXPOSE 8080
