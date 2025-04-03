@@ -1,6 +1,6 @@
 import { ReleaseNotesResponse, MetaResponse, ApiError } from '../types/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5173';
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
