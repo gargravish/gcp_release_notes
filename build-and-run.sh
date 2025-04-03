@@ -14,9 +14,30 @@ if [ ! -f "backend/.env.prod" ]; then
   exit 1
 else
   echo "Found backend/.env.prod file. Checking for required values..."
+  
+  # Check for BigQuery settings
   grep -q "BIGQUERY_DATASET" backend/.env.prod || echo "WARNING: BIGQUERY_DATASET not found in backend/.env.prod"
   echo "Using the following BigQuery settings:"
   grep "BIGQUERY" backend/.env.prod
+  
+  # Check for Gemini API settings
+  grep -q "GEMINI_API_KEY" backend/.env.prod || echo "WARNING: GEMINI_API_KEY not found in backend/.env.prod"
+  echo "Using the following Gemini API settings:"
+  grep "GEMINI" backend/.env.prod
+  
+  # Extract the Gemini API key for Docker build
+  GEMINI_API_KEY=$(grep "GEMINI_API_KEY" backend/.env.prod | cut -d'=' -f2)
+  if [ -z "$GEMINI_API_KEY" ]; then
+    echo "ERROR: GEMINI_API_KEY not found or empty in backend/.env.prod"
+    exit 1
+  fi
+  
+  # Extract Gemini model
+  GEMINI_MODEL=$(grep "GEMINI_MODEL" backend/.env.prod | cut -d'=' -f2)
+  if [ -z "$GEMINI_MODEL" ]; then
+    echo "WARNING: GEMINI_MODEL not found in backend/.env.prod, using default"
+    GEMINI_MODEL="gemini-2.5-pro-exp-03-25"
+  fi
 fi
 
 # Stop any running containers
@@ -25,11 +46,18 @@ docker stop $(docker ps -q --filter ancestor=gcp-release-notes-dashboard:local) 
 
 # Build the Docker image
 echo "Building Docker image with backend/.env.prod..."
-docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod -t gcp-release-notes-dashboard:local .
+docker build \
+  --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+  --build-arg GEMINI_API_KEY="$GEMINI_API_KEY" \
+  --build-arg GEMINI_MODEL="$GEMINI_MODEL" \
+  -t gcp-release-notes-dashboard:local .
 
-# Run the container
+# Run the container with environment variables
 echo "Starting container..."
-docker run -d -p 5173:5173 gcp-release-notes-dashboard:local
+docker run -d -p 5173:5173 \
+  -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+  -e GEMINI_MODEL="$GEMINI_MODEL" \
+  gcp-release-notes-dashboard:local
 
 # Test container health and configuration
 echo "Waiting for container to start..."
@@ -40,9 +68,9 @@ if [ -z "$CONTAINER_ID" ]; then
 else
   echo "Container started with ID: $CONTAINER_ID"
   echo "Checking environment variables in container..."
-  docker exec $CONTAINER_ID env | grep BIGQUERY
+  docker exec $CONTAINER_ID env | grep -E "BIGQUERY|GEMINI"
   echo "Testing API endpoint..."
-  curl -s http://localhost:5173/health || echo "Health endpoint not accessible."
+  curl -s http://localhost:5173/api/health || echo "Health endpoint not accessible."
 fi
 
 # Print success message

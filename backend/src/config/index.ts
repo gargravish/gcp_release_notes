@@ -2,6 +2,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Log loaded environment variables for debugging
+console.log('Loaded environment variables:');
+console.log('GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
+console.log('BIGQUERY_DATASET:', process.env.BIGQUERY_DATASET);
+console.log('BIGQUERY_TABLE:', process.env.BIGQUERY_TABLE);
+console.log('GEMINI_API_KEY:', process.env.GEMINI_API_KEY ? 'Set (masked)' : 'Not set');
+console.log('GEMINI_MODEL:', process.env.GEMINI_MODEL);
+
 export const config = {
   googleCloud: {
     projectId: process.env.GOOGLE_CLOUD_PROJECT,
@@ -13,7 +21,7 @@ export const config = {
   },
   vertexAI: {
     apiKey: process.env.GEMINI_API_KEY,
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-pro-exp-03-25',
   },
   server: {
     port: parseInt(process.env.PORT || '5173', 10),

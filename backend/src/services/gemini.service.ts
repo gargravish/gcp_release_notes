@@ -1,4 +1,4 @@
-import { VertexAI } from '@google-cloud/vertexai';
+import axios from 'axios';
 import { config } from '../config';
 import { ReleaseNote } from '../types';
 
@@ -9,15 +9,20 @@ export interface SummaryResult {
 }
 
 export class GeminiService {
-  private vertexAI: VertexAI;
+  private apiKey: string;
   private model: string;
+  private baseUrl: string;
 
   constructor() {
-    this.vertexAI = new VertexAI({
-      project: config.googleCloud.projectId || '',
-      location: 'us-central1',
-    });
+    // Get the API key and model from environment config
+    this.apiKey = config.vertexAI.apiKey || '';
     this.model = config.vertexAI.model || 'gemini-pro';
+    this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+    
+    // Log configuration on initialization
+    console.log('Initializing Gemini service with:');
+    console.log(`- API Key: ${this.apiKey ? '********' + this.apiKey.slice(-4) : 'NOT SET'}`);
+    console.log(`- Model: ${this.model}`);
   }
 
   private formatReleaseNotes(notes: ReleaseNote[]): string {
@@ -71,42 +76,48 @@ IMPORTANT GUIDELINES:
 
   async generateSummary(notes: ReleaseNote[]): Promise<SummaryResult> {
     try {
-      console.log('Starting to generate summary...');
-      const prompt = this.createPrompt(notes);
-      const model = this.vertexAI.preview.getGenerativeModel({
-        model: this.model,
-      });
-
-      console.log('Sending request to Gemini API...');
+      console.log('Starting to generate summary with direct API...');
       
-      const result = await model.generateContent({
+      if (!this.apiKey) {
+        throw new Error('Gemini API key is not configured. Please check your environment variables.');
+      }
+      
+      const prompt = this.createPrompt(notes);
+      
+      // Use Axios to call the Gemini API directly
+      const endpoint = `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`;
+      
+      console.log(`Sending request to Gemini API at ${endpoint.replace(this.apiKey, '***')}`);
+      
+      const response = await axios.post(endpoint, {
         contents: [{
           role: 'user',
           parts: [{
             text: prompt
           }]
         }],
-        generation_config: {
-          max_output_tokens: 2048,
+        generationConfig: {
+          maxOutputTokens: 2048,
           temperature: 0.2,
-          top_p: 0.8,
-          top_k: 40
+          topP: 0.8,
+          topK: 40
         }
       });
       
-      console.log('Received response from Gemini API');
-      const response = result.response;
+      console.log('Received response from Gemini API:', response.status);
       
-      const candidates = response.candidates || [];
-      let text = '';
-      
-      if (candidates.length > 0 && candidates[0].content) {
-        const parts = candidates[0].content.parts || [];
-        if (parts.length > 0) {
-          const part = parts[0] as { text?: string };
-          text = part.text || '';
-        }
+      if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
+        console.error('Invalid response format:', JSON.stringify(response.data));
+        throw new Error('Invalid response format from Gemini API');
       }
+      
+      const candidate = response.data.candidates[0];
+      if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+        console.error('No content in response:', JSON.stringify(candidate));
+        throw new Error('No content in response from Gemini API');
+      }
+      
+      const text = candidate.content.parts[0].text;
       
       if (!text) {
         console.error('No text generated in response');
@@ -126,6 +137,9 @@ IMPORTANT GUIDELINES:
       };
     } catch (error) {
       console.error('Error generating summary:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Axios error details:', error.response?.data);
+      }
       throw new Error(`Failed to generate summary using Gemini: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
