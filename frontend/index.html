@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Force HTTP content and prevent automatic HTTPS upgrade -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http:; style-src 'self' 'unsafe-inline' http:; img-src 'self' data: http:; connect-src 'self' http:;">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
     <title>GCP Release Notes Dashboard</title>
+    <!-- Force HTTP redirect script -->
+    <script>
+      if (window.location.protocol === 'https:') {
+        window.location.href = window.location.href.replace('https:', 'http:');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

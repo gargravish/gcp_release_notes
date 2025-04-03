@@ -17,18 +17,27 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "http:", "https:"],
+      defaultSrc: ["'self'", "http:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "http:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "http:"],
+      imgSrc: ["'self'", "data:", "http:"],
+      connectSrc: ["'self'", "http:"],
     }
-  }
+  },
+  // Disable HSTS to prevent HTTPS upgrading
+  strictTransportSecurity: false
 }));
 
-// Configure CORS more permissively for development
+// Add HTTP header middleware to disable HTTPS upgrading
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Security-Policy', "default-src 'self' http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http:; style-src 'self' 'unsafe-inline' http:; img-src 'self' data: http:; connect-src 'self' http:;");
+  next();
+});
+
+// Configure CORS to allow any origin
 app.use(cors({
-  origin: true, // Allow all origins temporarily
+  origin: true, // Allow all origins
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
