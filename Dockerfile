@@ -61,8 +61,13 @@ COPY --from=build /usr/src/app/backend/public ./public
 COPY --from=build /usr/src/app/backend/.env ./.env
 RUN echo "Checking environment in final image:" && cat .env | grep BIGQUERY
 
+# Set environment variables explicitly to override any default values in code
+ENV BIGQUERY_DATASET=raves_us
+ENV BIGQUERY_TABLE=release_notes
+ENV GOOGLE_CLOUD_PROJECT=raves-altostrat
+
 # Expose port
 EXPOSE 5173
 
 # Start the application with explicit host binding and log environment variables
-CMD ["sh", "-c", "env | grep BIGQUERY && node dist/index.js --host 0.0.0.0"] 
+CMD ["sh", "-c", "echo 'Starting with:' && env | grep BIGQUERY && node dist/index.js --host 0.0.0.0"] 

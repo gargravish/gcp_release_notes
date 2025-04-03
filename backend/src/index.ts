@@ -79,6 +79,18 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
+// Log environment variables and configuration at startup
+console.log('============ ENVIRONMENT SETUP ============');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
+console.log('DATASET ENV:', process.env.BIGQUERY_DATASET);
+console.log('TABLE ENV:', process.env.BIGQUERY_TABLE);
+console.log('DATASET CONFIG:', config.bigquery.dataset);
+console.log('TABLE CONFIG:', config.bigquery.table);
+console.log('PROJECT ID:', config.googleCloud.projectId);
+console.log('CORS ALLOWED ORIGINS:', config.cors.allowedOrigins);
+console.log('==========================================');
+
 // Start server
 const port = config.server.port;
 app.listen(port, '0.0.0.0', () => {
