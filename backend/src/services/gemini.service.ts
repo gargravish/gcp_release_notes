@@ -41,6 +41,15 @@ export class GeminiService {
     console.log(`- Base URL: ${this.baseUrl}`);
   }
 
+  // Helper methods for debugging
+  getModelName(): string {
+    return this.model;
+  }
+
+  isApiKeyConfigured(): boolean {
+    return !!this.apiKey && this.apiKey.length > 20;
+  }
+
   private formatReleaseNotes(notes: ReleaseNote[]): string {
     return notes
       .map(
@@ -94,8 +103,14 @@ IMPORTANT GUIDELINES:
     try {
       console.log('Starting to generate summary with direct API...');
       
+      // Strict validation for API key
       if (!this.apiKey) {
-        throw new Error('Gemini API key is not configured. Please check your environment variables.');
+        throw new Error('Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file.');
+      }
+      
+      // Strict validation for model
+      if (!this.model) {
+        throw new Error('Gemini model is not configured. Please set GEMINI_MODEL in your .env file.');
       }
       
       // Log the model and URL for debugging
@@ -109,7 +124,7 @@ IMPORTANT GUIDELINES:
       
       console.log(`Sending request to Gemini API at ${endpoint.replace(this.apiKey, '***')}`);
       
-      // Simplified request format for better compatibility
+      // Match the exact format used in the successful curl command
       const requestPayload = {
         contents: [
           {
@@ -149,26 +164,20 @@ IMPORTANT GUIDELINES:
         throw new Error('Empty response from Gemini API');
       }
       
-      // Handle different response formats
+      // Extract text from the response using the exact path from the API response
       let text = '';
       
       if (response.data.candidates && response.data.candidates.length > 0) {
         const candidate = response.data.candidates[0];
         
-        // Try to extract text based on different possible response formats
+        // Extract text using the exact path shown in the curl response
         if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
           text = candidate.content.parts[0].text || '';
-        } else if (candidate.text) {
-          text = candidate.text;
-        } else if (candidate.output) {
-          text = candidate.output;
         }
-      } else if (response.data.text) {
-        text = response.data.text;
       }
       
       if (!text) {
-        console.error('No text found in response:', JSON.stringify(response.data));
+        console.error('Could not extract text from response:', JSON.stringify(response.data, null, 2));
         throw new Error('Could not extract text from the Gemini API response');
       }
       

@@ -30,6 +30,8 @@ export class ReleaseNotesController {
       if (summarize && notes.length > 0) {
         try {
           console.log('Attempting to generate summary with Gemini...');
+          console.log(`Using model: ${this.geminiService.getModelName()}`);
+          console.log(`API key configured: ${!!this.geminiService.isApiKeyConfigured()}`);
           summary = await this.geminiService.generateSummary(notes);
           console.log('Summary generated successfully');
         } catch (error) {
