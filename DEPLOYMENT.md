@@ -429,7 +429,54 @@ jobs:
    - Check for quota limitations
    - Ensure the container port (5173) matches the port your application listens on
 
-5. **API Connection Issues**
+5. **Cannot Access Application from External IP**
+   - If you can access the application on localhost but not via external IP, check:
+     
+     a. **Verify the application is binding to all interfaces (0.0.0.0), not just localhost**:
+     ```bash
+     # Check what addresses the application is listening on
+     sudo netstat -tulpn | grep 5173
+     ```
+     It should show `0.0.0.0:5173` (listening on all interfaces), not just `127.0.0.1:5173`.
+     
+     b. **Check your firewall rules**:
+     ```bash
+     # List current firewall rules
+     gcloud compute firewall-rules list | grep 5173
+     
+     # Create firewall rule if missing
+     gcloud compute firewall-rules create allow-dashboard --allow tcp:5173 --target-tags=http-server
+     ```
+     
+     c. **Ensure your VM has the correct network tags**:
+     ```bash
+     # Check VM tags
+     gcloud compute instances describe YOUR_VM_NAME --zone=YOUR_ZONE
+     
+     # Add the http-server tag if needed
+     gcloud compute instances add-tags YOUR_VM_NAME --tags=http-server --zone=YOUR_ZONE
+     ```
+     
+     d. **Try restarting with explicit binding**:
+     ```bash
+     # If running directly:
+     PORT=5173 node backend/dist/index.js --host 0.0.0.0
+     
+     # If using Docker:
+     docker run -p 5173:5173 gcp-release-notes-dashboard:local
+     ```
+     
+     e. **Check external IP and test connection**:
+     ```bash
+     # Get external IP
+     EXTERNAL_IP=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H "Metadata-Flavor: Google")
+     echo "External IP: $EXTERNAL_IP"
+     
+     # Test connection
+     curl -v http://$EXTERNAL_IP:5173
+     ```
+
+6. **API Connection Issues**
    - Verify that BigQuery and Vertex AI APIs are enabled
    - Check service account permissions for these services
 

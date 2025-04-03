@@ -4,7 +4,7 @@
   "description": "Interactive dashboard for GCP Release Notes with AI summarization",
   "main": "backend/dist/index.js",
   "scripts": {
-    "start": "node backend/dist/index.js",
+    "start": "node backend/dist/index.js --host 0.0.0.0",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",

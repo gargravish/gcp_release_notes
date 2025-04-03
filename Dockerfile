@@ -59,5 +59,5 @@ RUN touch /usr/src/app/.env
 # Expose port
 EXPOSE 5173
 
-# Start the application
-CMD ["node", "dist/index.js"] 
+# Start the application with explicit host binding
+CMD ["node", "dist/index.js", "--host", "0.0.0.0"] 
