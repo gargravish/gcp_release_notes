@@ -38,4 +38,16 @@ export const api = {
     const data = await handleResponse<MetaResponse>(response);
     return data.types || [];
   },
+
+  async incrementVisitorCounter(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/visitor-counter/increment`, {
+      method: 'POST',
+    });
+    await handleResponse<void>(response);
+  },
+
+  async getVisitorCounter(): Promise<{ count: number }> {
+    const response = await fetch(`${API_BASE_URL}/visitor-counter`);
+    return handleResponse<{ count: number }>(response);
+  },
 }; 

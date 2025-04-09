@@ -3,6 +3,7 @@ import { Box, AppBar, Toolbar, Typography, Container, Paper, useTheme } from '@m
 import { Filters } from './Filters';
 import { ReleaseNotesList } from './ReleaseNotesList';
 import { Summary } from './Summary';
+import { VisitorCounter } from './VisitorCounter';
 
 export const Layout: React.FC = () => {
   const theme = useTheme();
@@ -23,6 +24,7 @@ export const Layout: React.FC = () => {
           }}>
             GCP Release Notes Dashboard
           </Typography>
+          <VisitorCounter />
         </Toolbar>
       </AppBar>
       

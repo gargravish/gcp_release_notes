@@ -1,4 +1,4 @@
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, Transaction } from '@google-cloud/firestore';
 import { config } from '../config';
 
 export class VisitorCounterService {
@@ -17,7 +17,7 @@ export class VisitorCounterService {
       const counterRef = this.firestore.collection(this.collectionName).doc(this.documentId);
       
       // Use a transaction to ensure atomic increment
-      const newCount = await this.firestore.runTransaction(async (transaction) => {
+      const newCount = await this.firestore.runTransaction(async (transaction: Transaction) => {
         const doc = await transaction.get(counterRef);
         let currentCount = 0;
         

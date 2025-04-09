@@ -9,7 +9,7 @@ export interface SummaryResult {
 }
 
 export class GeminiService {
-  private apiKey: string;
+  private apiKey: string = '';
   private model: string | undefined;
   private baseUrl: string = 'https://generativelanguage.googleapis.com/v1'; // Default to v1 API
 

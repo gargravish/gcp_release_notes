@@ -6,9 +6,11 @@ import { ReleaseNotesController } from './controllers/release-notes.controller';
 import { config } from './config';
 import dotenv from 'dotenv';
 import path from 'path';
+import { VisitorCounterController } from './controllers/visitor-counter.controller';
 
 const app = express();
 const controller = new ReleaseNotesController();
+const visitorCounterController = new VisitorCounterController();
 
 // Middleware
 app.use(helmet({
@@ -56,6 +58,10 @@ app.use(limiter);
 app.get('/api/release-notes', (req, res) => controller.getReleaseNotes(req, res));
 app.get('/api/meta/products', (req, res) => controller.getDistinctProducts(req, res));
 app.get('/api/meta/types', (req, res) => controller.getDistinctTypes(req, res));
+
+// Visitor Counter Routes
+app.post('/api/visitor-counter/increment', (req, res) => visitorCounterController.incrementCounter(req, res));
+app.get('/api/visitor-counter', (req, res) => visitorCounterController.getCounter(req, res));
 
 // Health check
 app.get('/health', (req, res) => {
