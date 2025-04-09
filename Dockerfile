@@ -63,39 +63,6 @@ RUN echo "=== Frontend Build Output ===" && ls -la frontend/dist || echo "fronte
 RUN if [ -d "frontend/dist/assets" ]; then echo "=== Frontend Assets Directory ===" && ls -la frontend/dist/assets && echo "============================="; fi
 RUN if [ -d "frontend/dist" ]; then echo "=== Frontend dist contents recursive ===" && find frontend/dist -type f | sort && echo "============================="; fi
 
-# Add the debugging overlay to the built index.html file
-RUN if [ -f "frontend/dist/index.html" ]; then \
-      echo "Modifying built index.html to add debugging..."; \
-      sed -i '/<\/head>/i \
-    <!-- Debugging script to help diagnose asset loading issues --> \
-    <script> \
-      window.addEventListener("DOMContentLoaded", function() { \
-        var debugDiv = document.createElement("div"); \
-        debugDiv.id = "asset-debug"; \
-        debugDiv.style = "position: fixed; bottom: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 10px; max-width: 400px; max-height: 200px; overflow: auto; font-family: monospace; font-size: 12px; z-index: 9999;"; \
-        var assetPaths = document.querySelectorAll("link[rel=stylesheet], script[src]"); \
-        var results = ""; \
-        assetPaths.forEach(function(asset) { \
-          var src = asset.getAttribute("href") || asset.getAttribute("src"); \
-          if (src) { \
-            var xhr = new XMLHttpRequest(); \
-            xhr.open("HEAD", src, false); \
-            try { \
-              xhr.send(); \
-              results += src + ": " + xhr.status + "<br>"; \
-            } catch(e) { \
-              results += src + ": Error - " + e.message + "<br>"; \
-            } \
-          } \
-        }); \
-        debugDiv.innerHTML = "<h4>Asset Test Results</h4>" + results + \
-                          "<p>Page URL: " + window.location.href + "</p>" + \
-                          "<p>Base URL: " + document.baseURI + "</p>"; \
-        document.body.appendChild(debugDiv); \
-      }); \
-    </script>' frontend/dist/index.html; \
-    fi
-
 # Create public directory in backend for frontend assets
 RUN mkdir -p backend/public/assets
 
