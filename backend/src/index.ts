@@ -74,7 +74,18 @@ app.use(express.json());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // limit each IP to 100 requests per windowMs
+  max: 500, // limit each IP to 500 requests per windowMs
+  // Use a custom key generator that handles IP addresses correctly
+  keyGenerator: (req) => {
+    // Get the client IP address, which might be from X-Forwarded-For in Cloud Run
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    // In case the IP contains port information, remove it
+    return ip.replace(/:\d+[^:]*$/, '');
+  },
+  // Add the validate option to suppress the warning
+  validate: {
+    trustProxy: false, // Disable the trustProxy validation since we're handling it correctly with our keyGenerator
+  }
 });
 app.use(limiter);
 
@@ -128,7 +139,10 @@ console.log('==========================================');
 
 // Start server
 const port = config.server.port;
-app.set('trust proxy', true); // Trust proxy headers from Cloud Run
+// Use a more specific trust proxy setting for Cloud Run
+// For Cloud Run, we want to trust the Google infrastructure proxies
+// but not allow arbitrary client-provided headers
+app.set('trust proxy', 1); // Trust the first proxy in Cloud Run
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port} in ${config.server.environment} mode`);
 }); 

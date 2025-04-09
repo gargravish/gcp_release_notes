@@ -247,6 +247,29 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
    - Verify request headers in the application logs
    - Check the browser console for mixed content warnings
 
+5. **Rate Limiting Issues**
+   - The application uses express-rate-limit to prevent abuse
+   - In Cloud Run, the `trust proxy` setting is configured to properly identify client IPs
+   - If rate limiting appears too aggressive or not working, check the logs:
+     ```bash
+     gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard AND textPayload:'rate limit'"
+     ```
+   - To troubleshoot IP address detection issues:
+     ```bash
+     # Add a temporary endpoint to see what IPs are being detected
+     app.get('/debug-ip', (req, res) => {
+       res.json({
+         ip: req.ip,
+         ips: req.ips,
+         headers: {
+           'x-forwarded-for': req.headers['x-forwarded-for'],
+           'x-forwarded-host': req.headers['x-forwarded-host'],
+           'x-forwarded-proto': req.headers['x-forwarded-proto']
+         }
+       });
+     });
+     ```
+
 ## Quick Reference Commands
 
 ### Build and Deploy
