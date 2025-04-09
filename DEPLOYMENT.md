@@ -23,6 +23,7 @@ This means you can deploy the application on any machine or cloud service withou
      - Cloud Build API
      - BigQuery API
      - Vertex AI API
+     - Firestore API
 
 2. **Tools Installed**
    - [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
@@ -36,8 +37,9 @@ This means you can deploy the application on any machine or cloud service withou
      - `roles/aiplatform.user`
      - `roles/run.admin`
      - `roles/storage.admin`
+     - `roles/datastore.user`
 
-## Step 1: Initial Setup
+## Step 1: Environment Configuration
 
 ### 1.1 Clone the Repository
 ```bash
@@ -71,458 +73,137 @@ gcloud auth configure-docker
    PORT=5173
    NODE_ENV=production
 
-   # CORS configuration (no longer needed for cross-origin requests since frontend and backend are served together)
-   # ALLOWED_ORIGINS=https://YOUR_DOMAIN.com
+# Google Cloud configuration
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+# For Cloud Run, you can omit GOOGLE_APPLICATION_CREDENTIALS and use the service account
 
-   # Google Cloud configuration
-   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-   # For Cloud Run, you can omit GOOGLE_APPLICATION_CREDENTIALS and use the service account
-   # GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+# BigQuery configuration
+BIGQUERY_PROJECT_ID=your-gcp-project-id
+BIGQUERY_DATASET=bigquery-public-data.google_cloud_release_notes
+BIGQUERY_TABLE=release_notes
 
-   # BigQuery configuration
-   BIGQUERY_PROJECT_ID=your-gcp-project-id
-   BIGQUERY_DATASET=bigquery-public-data.google_cloud_release_notes
-   BIGQUERY_TABLE=release_notes
+# Vertex AI configuration
+VERTEXAI_PROJECT_ID=your-gcp-project-id
+VERTEXAI_LOCATION=us-central1
+VERTEXAI_MODEL_ID=gemini-1.5-flash
 
-   # Vertex AI configuration
-   VERTEXAI_PROJECT_ID=your-gcp-project-id
-   VERTEXAI_LOCATION=us-central1
-   VERTEXAI_MODEL_ID=gemini-1.5-flash
+# Security
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
 
-   # Security
-   RATE_LIMIT_WINDOW_MS=900000
-   RATE_LIMIT_MAX_REQUESTS=100
-   ```
-
-### 2.2 Configure Frontend Environment Variables
-1. Create a `frontend/.env.production` file:
-   ```bash
-   # Create the file with production settings
-   cat <<EOF > frontend/.env.production
-   # The API_URL is not needed as we're serving from the same origin
-   # VITE_API_URL=http://localhost:8080
-   VITE_ENABLE_ANALYTICS=true
-   VITE_ENABLE_AI_SUMMARY=true
-   VITE_DEFAULT_TIMEFRAME=last_month
-   VITE_MAX_PRODUCTS_SELECTION=10
-   EOF
-   ```
-
-## Step 3: Testing Locally
-
-### 3.1 Install Dependencies and Build
-```bash
-# Install dependencies for root, backend, and frontend
-npm run install:all
-
-# Build both frontend and backend
-npm run build
+# Firestore configuration
+FIRESTORE_COLLECTION=visitor_counters
+FIRESTORE_DOCUMENT_ID=global_counter
 ```
 
-### 3.2 Run the Application Locally
+### 1.2 Configure Frontend Environment Variables
+Create a `frontend/.env.production` file:
 ```bash
-# Start the application
-npm start
+cat <<EOF > frontend/.env.production
+VITE_ENABLE_ANALYTICS=true
+VITE_ENABLE_AI_SUMMARY=true
+VITE_DEFAULT_TIMEFRAME=last_month
+VITE_MAX_PRODUCTS_SELECTION=10
+EOF
 ```
 
-Your application should now be running at http://localhost:5173.
+## Step 2: Deploy to Google Cloud Run
 
-### 3.3 Test Docker Build
+### 2.1 Build and Push Docker Image
 ```bash
-# Build the Docker image
-docker build -t gcp-release-notes-dashboard:local .
+# Build the Docker image with production environment files
+docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+             --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
+             -t gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest .
 
-# Run the Docker image
-docker run -p 5173:5173 gcp-release-notes-dashboard:local
+# Push the image to Google Container Registry
+docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
 ```
 
-Visit http://localhost:5173 to verify that the application is working correctly.
-
-## Step 4: Deploy to Google Cloud Run
-
-### 4.1 Manual Deployment
-
-1. Build and push the Docker image to Google Container Registry:
-   ```bash
-   # First, make sure your environment files exist
-   cp backend/.env.example backend/.env.prod
-   cp frontend/.env.example frontend/.env.production
-   
-   # Edit these files with your production settings
-   nano backend/.env.prod
-   nano frontend/.env.production
-   
-   # Build the Docker image with production environment files
-   docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
-                --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
-                -t gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest .
-
-   # Push the image to Google Container Registry
-   docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
-   ```
-
-   > **Note:** If you encounter errors about copying files to themselves, ensure you're using the correct environment file paths that are different from the default destination paths.
-
-2. Deploy to Cloud Run:
-   ```bash
-   gcloud run deploy gcp-release-notes-dashboard \
-     --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest \
-     --region=us-central1 \
-     --platform=managed \
-     --allow-unauthenticated \
-     --memory=512Mi \
-     --cpu=1 \
-     --min-instances=0 \
-     --max-instances=10 \
-     --port=5173
-   ```
-
-### 4.2 Automated Deployment with Cloud Build
-
-1. Store your environment files in Google Cloud Secret Manager:
-   ```bash
-   # Create secrets for the backend and frontend environment files
-   gcloud secrets create gcp-release-notes-backend-env --data-file=backend/.env.prod
-   gcloud secrets create gcp-release-notes-frontend-env --data-file=frontend/.env.production
-   ```
-
-2. Grant the Cloud Build service account access to Secret Manager:
-   ```bash
-   PROJECT_NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)')
-   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-     --member=serviceAccount:$PROJECT_NUMBER@cloudbuild.gserviceaccount.com \
-     --role=roles/secretmanager.secretAccessor
-   ```
-
-3. Trigger the Cloud Build using the provided cloudbuild.yaml:
-   ```bash
-   gcloud builds submit --config=cloudbuild.yaml .
-   ```
-
-## Step 5: Deploy to Google Compute Engine (Alternative to Cloud Run)
-
-If you prefer to deploy to a VM instead of Cloud Run, follow these steps:
-
-### 5.1 Create a GCE VM Instance
+### 2.2 Deploy to Cloud Run
 ```bash
-# Create a VM instance with the necessary scopes for BigQuery and Vertex AI
+gcloud run deploy gcp-release-notes-dashboard \
+  --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest \
+  --region=us-central1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --memory=512Mi \
+  --cpu=1 \
+  --min-instances=0 \
+  --max-instances=10 \
+  --port=5173
+```
+
+## Step 3: Deploy to Google Compute Engine (Alternative)
+
+### 3.1 Create a GCE VM Instance
+```bash
 gcloud compute instances create gcp-release-notes-dashboard \
   --machine-type=e2-medium \
   --zone=us-central1-a \
   --scopes=https://www.googleapis.com/auth/cloud-platform \
-  --tags=http-server,https-server \
+  --tags=http-server \
   --image-family=debian-11 \
   --image-project=debian-cloud \
   --boot-disk-size=20GB
 ```
 
-### 5.2 Set Up Firewall Rules
+### 3.2 Set Up Firewall Rules
 ```bash
-# Create a firewall rule to allow HTTP traffic
-gcloud compute firewall-rules create allow-http \
+gcloud compute firewall-rules create allow-dashboard \
   --action=ALLOW \
   --rules=tcp:5173 \
   --source-ranges=0.0.0.0/0 \
   --target-tags=http-server
 ```
 
-### 5.3 SSH into the VM
+### 3.3 Deploy Using Docker on VM
 ```bash
+# SSH into the VM
 gcloud compute ssh gcp-release-notes-dashboard --zone=us-central1-a
-```
 
-### 5.4 Install Dependencies on the VM
-```bash
-# Update package lists
-sudo apt-get update
-
-# Install Node.js and npm
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Install Git
-sudo apt-get install -y git
-
-# Install Docker (optional, if you want to use Docker on the VM)
-sudo apt-get install -y docker.io
-sudo systemctl enable docker
-sudo systemctl start docker
-sudo usermod -aG docker $USER
-# Log out and log back in for group changes to take effect
-```
-
-### 5.5 Deploy the Application on the VM
-
-#### Option 1: Direct Deployment
-```bash
-# Clone the repository
+# On the VM:
 git clone https://github.com/your-username/gcp-release-notes-dashboard.git
 cd gcp-release-notes-dashboard
 
 # Set up environment files
-cp backend/.env.example backend/.env
+cp backend/.env.example backend/.env.prod
 cp frontend/.env.example frontend/.env.production
 
 # Edit environment files with your configuration
-nano backend/.env
+nano backend/.env.prod
 nano frontend/.env.production
 
-# Install dependencies and build
-npm run install:all
-npm run build
+# Build and run the Docker container
+docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+             --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
+             -t gcp-release-notes-dashboard:latest .
 
-# Start the application
-npm start
-```
-
-#### Option 2: Docker Deployment on VM
-```bash
-# Clone the repository
-git clone https://github.com/your-username/gcp-release-notes-dashboard.git
-cd gcp-release-notes-dashboard
-
-# Set up environment files
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.production
-
-# Edit environment files with your configuration
-nano backend/.env
-nano frontend/.env.production
-
-# Build the Docker image
-docker build -t gcp-release-notes-dashboard:latest .
-
-# Run the container
-docker run -d -p 5173:5173 gcp-release-notes-dashboard:latest
-```
-
-### 5.6 Set Up a Startup Script (Optional)
-Create a systemd service to start the application on boot:
-
-```bash
-sudo nano /etc/systemd/system/dashboard.service
-```
-
-Add the following content:
-```
-[Unit]
-Description=GCP Release Notes Dashboard
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/home/your-username/gcp-release-notes-dashboard
-ExecStart=/usr/bin/npm start
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start the service:
-```bash
-sudo systemctl enable dashboard
-sudo systemctl start dashboard
-```
-
-## Step 6: Set Up Custom Domain (Optional)
-
-### 6.1 Map a Custom Domain to Your Cloud Run Service
-1. Verify domain ownership in Cloud Console
-2. Map the domain to your service:
-   ```bash
-   gcloud beta run domain-mappings create \
-     --service=gcp-release-notes-dashboard \
-     --domain=dashboard.yourdomain.com \
-     --region=us-central1
-   ```
-
-3. Update DNS records according to the instructions provided by Google Cloud
-
-## Step 7: Continuous Deployment with GitHub Actions
-
-### 7.1 Setting up GitHub Secrets
-Add the following secrets to your GitHub repository:
-- `GCP_PROJECT_ID`: Your Google Cloud Project ID
-- `GCP_SA_KEY`: Base64-encoded service account key JSON
-
-### 7.2 Create GitHub Actions Workflow
-Create a file `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy to Cloud Run
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
-      with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
-        service_account_key: ${{ secrets.GCP_SA_KEY }}
-    - name: Configure Docker
-      run: gcloud auth configure-docker
-    - name: Create environment files
-      run: |
-        # Create backend .env.prod file (replace with your actual config or use secrets)
-        cat <<EOF > backend/.env.prod
-        PORT=5173
-        NODE_ENV=production
-        GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}
-        BIGQUERY_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-        BIGQUERY_DATASET=bigquery-public-data.google_cloud_release_notes
-        BIGQUERY_TABLE=release_notes
-        VERTEXAI_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
-        VERTEXAI_LOCATION=us-central1
-        VERTEXAI_MODEL_ID=gemini-1.5-flash
-        RATE_LIMIT_WINDOW_MS=900000
-        RATE_LIMIT_MAX_REQUESTS=100
-        EOF
-        
-        # Create frontend .env.production file
-        cat <<EOF > frontend/.env.production
-        VITE_ENABLE_ANALYTICS=true
-        VITE_ENABLE_AI_SUMMARY=true
-        VITE_DEFAULT_TIMEFRAME=last_month
-        VITE_MAX_PRODUCTS_SELECTION=10
-        EOF
-        
-        # Update package.json to skip TypeScript checks if needed
-        sed -i 's/cd frontend && npm run build/cd frontend \&\& npm run build:no-check/g' cloudbuild.yaml
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud builds submit --config=cloudbuild.yaml .
+docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:latest
 ```
 
 ## Troubleshooting
 
 ### Common Issues and Solutions
 
-1. **TypeScript Build Errors**
-   - If you encounter build errors related to TypeScript during Docker build, there are two approaches:
-     - **Recommended for Production:** Fix the TypeScript errors in the frontend code
-     - **Quick Workaround for Testing:** Use the `build:no-check` script by modifying the Dockerfile:
-       ```diff
-       # Build frontend
-       - RUN cd frontend && npm run build
-       + RUN cd frontend && npm run build:no-check
-       ```
-   - Common TypeScript errors include:
-     - Unused imports (TS6133)
-     - Type mismatches in React components (TS2322)
-     - Missing properties in component props (TS2339)
-   - A common issue is also with the `bigquery.service.ts` file where the BigQuery initialization may reference incorrect config properties. Ensure your config structure in `src/config/index.ts` matches the environment variables you've set.
-
-2. **Environment Variables Issues**
-   - Check if all required environment variables are correctly set in both backend/.env and frontend/.env.production
-   - Verify that the Dockerfile is correctly copying these files
-
-3. **Container Build Failures**
-   - **Same File Copy Error**: If you see an error like `cp: 'backend/.env' and 'backend/.env' are the same file`, it means your Docker build arguments are pointing to the same file as the destination. Make sure you use different file paths:
-     ```bash
-     docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
-                  --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
-                  -t gcp-release-notes-dashboard:local .
-     ```
-   - Check Docker errors in the build logs
-   - Ensure all files are included in the Docker build context
-   - Verify NODE_ENV is set to production for the production build
-
-4. **Cloud Run Deployment Failures**
-   - Verify service account permissions
-   - Check for quota limitations
-   - Ensure the container port (5173) matches the port your application listens on
-
-5. **Cannot Access Application from External IP**
-   - If you can access the application on localhost but not via external IP, check:
-     
-     a. **Verify the application is binding to all interfaces (0.0.0.0), not just localhost**:
+1. **Cannot Access Application from External IP**
+   - Verify the application is binding to all interfaces (0.0.0.0):
      ```bash
      # Check what addresses the application is listening on
      sudo netstat -tulpn | grep 5173
      ```
-     It should show `0.0.0.0:5173` (listening on all interfaces), not just `127.0.0.1:5173`.
-     
-     b. **Check your firewall rules**:
-     ```bash
-     # List current firewall rules
-     gcloud compute firewall-rules list | grep 5173
-     
-     # Create firewall rule if missing
-     gcloud compute firewall-rules create allow-dashboard --allow tcp:5173 --target-tags=http-server
-     ```
-     
-     c. **Ensure your VM has the correct network tags**:
-     ```bash
-     # Check VM tags
-     gcloud compute instances describe YOUR_VM_NAME --zone=YOUR_ZONE
-     
-     # Add the http-server tag if needed
-     gcloud compute instances add-tags YOUR_VM_NAME --tags=http-server --zone=YOUR_ZONE
-     ```
-     
-     d. **Try restarting with explicit binding**:
-     ```bash
-     # If running directly:
-     PORT=5173 node backend/dist/index.js --host 0.0.0.0
-     
-     # If using Docker:
-     docker run -p 5173:5173 gcp-release-notes-dashboard:local
-     ```
-     
-     e. **Check external IP and test connection**:
-     ```bash
-     # Get external IP
-     EXTERNAL_IP=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H "Metadata-Flavor: Google")
-     echo "External IP: $EXTERNAL_IP"
-     
-     # Test connection
-     curl -v http://$EXTERNAL_IP:5173
-     ```
+   - Ensure firewall rules are correctly set up
+   - Check VM network tags
 
-6. **API Connection Issues**
-   - Verify that BigQuery and Vertex AI APIs are enabled
-   - Check service account permissions for these services
+2. **Container Build Failures**
+   - Verify environment files are correctly set up
+   - Check Docker build logs for errors
+   - Ensure all required environment variables are set
 
-## Monitoring and Maintenance
-
-### Monitoring the Deployed Service
-1. View Cloud Run logs:
-   ```bash
-   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard"
-   ```
-
-2. Set up alerting for errors:
-   ```bash
-   gcloud alpha monitoring channels create --display-name="Email Alert" --type=email --channel-labels=email_address=your-email@example.com
-   ```
-
-### Updating Deployed Service
-1. Make code changes
-2. Build and test locally
-3. Push the changes to GitHub if using GitHub Actions, or manually rebuild and deploy
-
-### Scaling Configuration
-1. Adjust instance limits:
-   ```bash
-   gcloud run services update gcp-release-notes-dashboard \
-     --min-instances=1 \
-     --max-instances=20
-   ```
-
-2. Modify memory and CPU allocation:
-   ```bash
-   gcloud run services update gcp-release-notes-dashboard \
-     --memory=1Gi \
-     --cpu=2
-   ```
+3. **API Connection Issues**
+   - Verify that required Google Cloud APIs are enabled
+   - Check service account permissions
+   - Ensure Firestore is properly configured
 
 ## Quick Reference Commands
 
@@ -534,12 +215,11 @@ npm run build
 npm start
 
 # Manual deployment
-docker build -t gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest .
+docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+             --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
+             -t gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest .
 docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
 gcloud run deploy gcp-release-notes-dashboard --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest --region=us-central1 --platform=managed --allow-unauthenticated --port=5173
-
-# Cloud Build deployment
-gcloud builds submit --config=cloudbuild.yaml .
 ```
 
 ### Monitoring
