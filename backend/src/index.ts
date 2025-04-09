@@ -99,7 +99,7 @@ console.log('==========================================');
 
 // Start server
 const port = config.server.port;
-app.set('trust proxy', true);
+app.set('trust proxy', 'loopback');
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port} in ${config.server.environment} mode`);
 }); 
