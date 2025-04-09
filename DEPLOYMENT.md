@@ -10,6 +10,7 @@ The application has been designed to be fully portable and machine-agnostic:
 - **No hardcoded IPs**: No reliance on specific IP addresses or domains
 - **Self-contained**: Backend serves frontend assets from the same origin
 - **Cross-environment consistency**: Works the same in local, VM, and cloud environments
+- **HTTPS Support**: Automatic handling of HTTPS redirects in Cloud Run
 
 This means you can deploy the application on any machine or cloud service without modification, and it will automatically adapt to whatever hostname or IP address is used to access it.
 
@@ -134,6 +135,42 @@ gcloud run deploy gcp-release-notes-dashboard \
   --port=5173
 ```
 
+## HTTPS Handling in Cloud Run
+
+Cloud Run automatically provisions HTTPS endpoints and terminates TLS connections at its edge. The dashboard application is configured to handle this setup correctly:
+
+### Automatic HTTPS Redirects
+The application now automatically detects when a request comes in via HTTP and redirects it to HTTPS. This is important because:
+
+1. Cloud Run services always receive requests over HTTPS at the edge
+2. Requests are forwarded internally with the `X-Forwarded-Proto` header
+3. The application checks this header and redirects as needed
+
+### Headers and Security Configuration
+The application sets appropriate headers for both HTTP and HTTPS:
+
+- Content Security Policy allows both HTTP and HTTPS resources
+- Cache control headers prevent browser caching issues 
+- CORS is configured to work with all origins
+
+### Troubleshooting HTTPS Issues
+If you encounter HTTPS-related issues in Cloud Run:
+
+1. Check the application logs for any redirect errors:
+   ```bash
+   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard AND textPayload:proto"
+   ```
+
+2. Verify that your application is detecting the `X-Forwarded-Proto` header correctly:
+   ```bash
+   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard AND textPayload:headers"
+   ```
+
+3. Ensure `trust proxy` is set in the application (already configured in the codebase):
+   ```javascript
+   app.set('trust proxy', true);
+   ```
+
 ## Step 3: Deploy to Google Compute Engine (Alternative)
 
 ### 3.1 Create a GCE VM Instance
@@ -204,6 +241,11 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
    - Verify that required Google Cloud APIs are enabled
    - Check service account permissions
    - Ensure Firestore is properly configured
+
+4. **HTTPS and Redirect Issues**
+   - Check if your Cloud Run service is being accessed at the correct URL
+   - Verify request headers in the application logs
+   - Check the browser console for mixed content warnings
 
 ## Quick Reference Commands
 

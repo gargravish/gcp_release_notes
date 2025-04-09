@@ -12,6 +12,30 @@ const app = express();
 const controller = new ReleaseNotesController();
 const visitorCounterController = new VisitorCounterController();
 
+// Middleware to handle HTTPS redirects correctly for Cloud Run
+app.use((req, res, next) => {
+  // Cloud Run sets this header
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  
+  // Only redirect if not already HTTPS and not a health check
+  if (forwardedProto === 'http' && req.path !== '/health') {
+    const httpsUrl = `https://${req.headers.host}${req.url}`;
+    return res.redirect(301, httpsUrl);
+  }
+  next();
+});
+
+// Add headers to prevent caching issues
+app.use((req, res, next) => {
+  // Prevent caching if that's causing the issue
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  next();
+});
+
 // Middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
@@ -19,21 +43,21 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'", "http:"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "http:"],
-      styleSrc: ["'self'", "'unsafe-inline'", "http:"],
-      imgSrc: ["'self'", "data:", "http:"],
-      connectSrc: ["'self'", "http:"],
+      defaultSrc: ["'self'", "https:", "http:"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      connectSrc: ["'self'", "https:", "http:"],
     }
   },
-  // Disable HSTS to prevent HTTPS upgrading
+  // Allow both HTTP and HTTPS for Cloud Run
   strictTransportSecurity: false
 }));
 
-// Add HTTP header middleware to disable HTTPS upgrading
+// Add HTTP header middleware for security
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Security-Policy', "default-src 'self' http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http:; style-src 'self' 'unsafe-inline' http:; img-src 'self' data: http:; connect-src 'self' http:;");
+  res.setHeader('Content-Security-Policy', "default-src 'self' https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'self' 'unsafe-inline' https: http:; img-src 'self' data: https: http:; connect-src 'self' https: http:;");
   next();
 });
 
@@ -76,12 +100,17 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// Error handling
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+// Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
+  console.error('Error:', err);
   res.status(500).json({
     error: 'Internal Server Error',
-    message: 'Something went wrong',
+    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
   });
 });
 
@@ -99,7 +128,7 @@ console.log('==========================================');
 
 // Start server
 const port = config.server.port;
-app.set('trust proxy', 'loopback');
+app.set('trust proxy', true); // Trust proxy headers from Cloud Run
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port} in ${config.server.environment} mode`);
 }); 
