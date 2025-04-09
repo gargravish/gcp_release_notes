@@ -158,18 +158,59 @@ If you encounter HTTPS-related issues in Cloud Run:
 
 1. Check the application logs for any redirect errors:
    ```bash
-   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard AND textPayload:proto"
+   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:proto"
    ```
 
 2. Verify that your application is detecting the `X-Forwarded-Proto` header correctly:
    ```bash
-   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard AND textPayload:headers"
+   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:headers"
    ```
 
 3. Ensure `trust proxy` is set in the application (already configured in the codebase):
    ```javascript
    app.set('trust proxy', true);
    ```
+
+4. **HTTPS and Redirect Issues**
+   - Check if your Cloud Run service is being accessed at the correct URL
+   - Verify request headers in the application logs
+   - Check the browser console for mixed content warnings
+   - Use the built-in `/debug` endpoint to check request and runtime information:
+     ```bash
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/debug
+     ```
+   - Examine detailed logs for redirect handling:
+     ```bash
+     gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Redirecting to HTTPS'"
+     ```
+   - Check for frontend asset serving issues:
+     ```bash
+     gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Serving static file'"
+     ```
+   - If you see issues with the frontend assets, check the build process in your Dockerfile to ensure the static files are correctly copied to the backend/public directory
+
+5. **Rate Limiting Issues**
+   - The application uses express-rate-limit to prevent abuse
+   - In Cloud Run, the `trust proxy` setting is configured to properly identify client IPs
+   - If rate limiting appears too aggressive or not working, check the logs:
+     ```bash
+     gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard AND textPayload:'rate limit'"
+     ```
+   - To troubleshoot IP address detection issues:
+     ```bash
+     # Add a temporary endpoint to see what IPs are being detected
+     app.get('/debug-ip', (req, res) => {
+       res.json({
+         ip: req.ip,
+         ips: req.ips,
+         headers: {
+           'x-forwarded-for': req.headers['x-forwarded-for'],
+           'x-forwarded-host': req.headers['x-forwarded-host'],
+           'x-forwarded-proto': req.headers['x-forwarded-proto']
+         }
+       });
+     });
+     ```
 
 ## Step 3: Deploy to Google Compute Engine (Alternative)
 
@@ -246,6 +287,19 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
    - Check if your Cloud Run service is being accessed at the correct URL
    - Verify request headers in the application logs
    - Check the browser console for mixed content warnings
+   - Use the built-in `/debug` endpoint to check request and runtime information:
+     ```bash
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/debug
+     ```
+   - Examine detailed logs for redirect handling:
+     ```bash
+     gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Redirecting to HTTPS'"
+     ```
+   - Check for frontend asset serving issues:
+     ```bash
+     gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Serving static file'"
+     ```
+   - If you see issues with the frontend assets, check the build process in your Dockerfile to ensure the static files are correctly copied to the backend/public directory
 
 5. **Rate Limiting Issues**
    - The application uses express-rate-limit to prevent abuse
