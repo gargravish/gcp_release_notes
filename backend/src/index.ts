@@ -216,7 +216,9 @@ app.get('/debug', (req, res) => {
     missingCriticalFiles: missingCriticalFiles.length > 0 ? missingCriticalFiles : 'None',
     env: {
       NODE_ENV: process.env.NODE_ENV,
-      PORT: process.env.PORT
+      PORT: process.env.PORT,
+      CORS_ORIGINS: config.cors.allowedOrigins,
+      PUBLIC_PATH_RESOLVED: path.resolve(publicPath)
     }
   });
 });
@@ -277,10 +279,38 @@ app.use(express.static(path.join(__dirname, '../public'), {
   }
 }));
 
+// New endpoint to verify static file serving directly
+app.get('/static-file-test/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const publicPath = path.join(__dirname, '../public');
+  const fullPath = path.join(publicPath, filename);
+  
+  if (fs.existsSync(fullPath)) {
+    res.json({
+      fileExists: true,
+      fileName: filename,
+      fullPath: fullPath,
+      fileSize: fs.statSync(fullPath).size,
+      isFile: fs.statSync(fullPath).isFile()
+    });
+  } else {
+    res.status(404).json({
+      fileExists: false,
+      fileName: filename,
+      fullPath: fullPath,
+      error: 'File not found'
+    });
+  }
+});
+
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res, next) => {
   // Skip API and health check routes
-  if (req.path.startsWith('/api/') || req.path === '/health' || req.path === '/debug' || req.path === '/test') {
+  if (req.path.startsWith('/api/') || 
+      req.path === '/health' || 
+      req.path === '/debug' || 
+      req.path === '/test' ||
+      req.path.startsWith('/static-file-test/')) {
     return next();
   }
   
@@ -322,6 +352,8 @@ app.get('*', (req, res, next) => {
             <li><a href="/health">/health</a> - Health check endpoint</li>
             <li><a href="/debug">/debug</a> - Debug endpoint with detailed information</li>
             <li><a href="/test">/test</a> - Test endpoint for frontend diagnosis</li>
+            <li><a href="/static-file-test/index.html">/static-file-test/index.html</a> - Test specific file accessibility</li>
+            <li><a href="/static-file-test/assets/index-DLnPPNGv.css">/static-file-test/assets/index-DLnPPNGv.css</a> - Test CSS asset</li>
             <li><a href="/">/</a> - Main application (requires frontend assets)</li>
           </ul>
         </div>
@@ -338,7 +370,23 @@ app.get('*', (req, res, next) => {
   
   // Check if the index.html file exists
   if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
+    console.log(`Sending index.html file from: ${indexPath}`);
+    
+    // Try reading the file first to debug any potential issues
+    try {
+      const indexContent = fs.readFileSync(indexPath, 'utf8');
+      console.log(`Successfully read index.html, size: ${indexContent.length} bytes`);
+      
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error('Error sending index.html file:', err);
+          res.status(500).send('Error serving frontend application');
+        }
+      });
+    } catch (err) {
+      console.error('Error reading index.html file:', err);
+      res.redirect('/static-test');
+    }
   } else {
     console.error('ERROR: Frontend index.html not found at', indexPath);
     res.redirect('/static-test'); // Redirect to static test page instead of showing an error

@@ -54,24 +54,32 @@ RUN if [ -f "$FRONTEND_ENV_FILE" ] && [ "$FRONTEND_ENV_FILE" != "frontend/.env" 
 RUN echo "=== Frontend Environment ===" && ls -la frontend && echo "===================="
 
 # Build frontend with Vite
-RUN cd frontend && npm run build:no-check
+WORKDIR /usr/src/app/frontend
+RUN npm run build:no-check
 
-# Debug frontend build output
+# Debug frontend build output with more detailed information
+WORKDIR /usr/src/app
 RUN echo "=== Frontend Build Output ===" && ls -la frontend/dist || echo "frontend/dist directory not found" && echo "============================"
 RUN if [ -d "frontend/dist/assets" ]; then echo "=== Frontend Assets Directory ===" && ls -la frontend/dist/assets && echo "============================="; fi
+RUN if [ -d "frontend/dist" ]; then echo "=== Frontend dist contents recursive ===" && find frontend/dist -type f | sort && echo "============================="; fi
 
 # Create public directory in backend for frontend assets
 RUN mkdir -p backend/public
 
-# Copy frontend build to backend/public
-RUN cp -r frontend/dist/* backend/public/ || echo "Failed to copy frontend/dist to backend/public"
+# Copy frontend build to backend/public with more verification
+RUN cp -r frontend/dist/* backend/public/ || { echo "Failed to copy frontend/dist to backend/public"; exit 1; }
 
-# Debug backend public directory
+# Make sure index.html exists in backend/public
+RUN if [ ! -f "backend/public/index.html" ]; then echo "ERROR: index.html not found in backend/public"; exit 1; fi
+
+# Debug backend public directory with more detailed information
 RUN echo "=== Backend Public Directory ===" && ls -la backend/public && echo "================================="
 RUN if [ -d "backend/public/assets" ]; then echo "=== Backend Public Assets Directory ===" && ls -la backend/public/assets && echo "===================================="; fi
+RUN echo "=== Backend public contents recursive ===" && find backend/public -type f | sort && echo "=============================";
 
 # Build backend with TypeScript
-RUN cd backend && npm run build
+WORKDIR /usr/src/app/backend
+RUN npm run build
 
 # Production stage
 FROM node:20-alpine
@@ -89,13 +97,17 @@ COPY backend/package*.json ./
 # Install production dependencies only
 RUN npm install --only=production
 
-# Copy built app
+# Copy built app 
 COPY --from=build /usr/src/app/backend/dist ./dist
 COPY --from=build /usr/src/app/backend/public ./public
 
 # Debug the public directory in production stage
 RUN echo "=== Production Public Directory ===" && ls -la public && echo "==================================="
 RUN if [ -d "public/assets" ]; then echo "=== Production Public Assets Directory ===" && ls -la public/assets && echo "=========================================="; fi
+RUN echo "=== Production public contents recursive ===" && find public -type f | sort && echo "=============================";
+
+# Verify index.html exists in the final image
+RUN if [ ! -f "public/index.html" ]; then echo "ERROR: index.html not found in final image"; exit 1; fi
 
 # Copy .env file explicitly
 COPY --from=build /usr/src/app/backend/.env ./.env

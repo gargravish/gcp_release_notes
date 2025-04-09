@@ -1,113 +1,132 @@
 #!/bin/bash
 
-# Get the external IP (just for displaying access URL)
-EXTERNAL_IP=$(curl -s http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H "Metadata-Flavor: Google")
-if [ -z "$EXTERNAL_IP" ]; then
-  echo "Could not detect external IP, defaulting to localhost"
-  EXTERNAL_IP="localhost"
-fi
+# Configuration
+IMAGE_NAME="gcp-release-notes-dashboard"
+CONTAINER_NAME="gcp-release-notes-dashboard"
+PORT="5173"
 
-# Verify backend environment file
-if [ ! -f "backend/.env.prod" ]; then
-  echo "ERROR: backend/.env.prod file not found. Please create it before building."
-  echo "You can copy backend/.env.example to backend/.env.prod and modify it."
-  exit 1
-else
-  echo "Found backend/.env.prod file. Checking for required values..."
-  
-  # Check for BigQuery settings
-  grep -q "BIGQUERY_DATASET" backend/.env.prod || echo "WARNING: BIGQUERY_DATASET not found in backend/.env.prod"
-  echo "Using the following BigQuery settings:"
-  grep "BIGQUERY" backend/.env.prod
-  
-  # Check for Gemini API settings
-  grep -q "GEMINI_API_KEY" backend/.env.prod || echo "WARNING: GEMINI_API_KEY not found in backend/.env.prod"
-  echo "Using the following Gemini API settings:"
-  grep "GEMINI" backend/.env.prod
-  
-  # Extract the Gemini API key for Docker build
-  GEMINI_API_KEY=$(grep "GEMINI_API_KEY" backend/.env.prod | cut -d'=' -f2)
-  if [ -z "$GEMINI_API_KEY" ]; then
-    echo "ERROR: GEMINI_API_KEY not found or empty in backend/.env.prod"
-    exit 1
-  fi
-  
-  # Extract Gemini model
-  GEMINI_MODEL=$(grep "GEMINI_MODEL" backend/.env.prod | grep -v "#" | cut -d'=' -f2)
-  if [ -z "$GEMINI_MODEL" ]; then
-    echo "WARNING: GEMINI_MODEL not found or empty in backend/.env.prod"
-    echo "Adding a default model to the environment"
-    echo "GEMINI_MODEL=gemini-1.5-pro" >> backend/.env.prod
-    GEMINI_MODEL="gemini-1.5-pro"
-  fi
-  
-  # Validate Gemini model
-  case "$GEMINI_MODEL" in
-    "gemini-1.5-pro"|"gemini-1.5-flash"|"gemini-1.0-pro"|"gemini-pro"|"gemini-pro-vision"|"gemini-2.5-pro-exp-03-25"|"gemini-2.0-flash")
-      echo "Using Gemini model: $GEMINI_MODEL"
-      # Add a note for experimental models
-      if [[ "$GEMINI_MODEL" == *"gemini-2"* ]] || [[ "$GEMINI_MODEL" == *"-exp-"* ]] || [[ "$GEMINI_MODEL" == *"-preview-"* ]]; then
-        echo "Note: $GEMINI_MODEL is an experimental model which may be unstable."
-        echo "The application will automatically fall back to gemini-1.5-pro if this model fails."
-      fi
-      ;;
-    *)
-      echo "WARNING: '$GEMINI_MODEL' might not be a valid model name, but we'll try to use it anyway."
-      echo "If you encounter errors, try falling back to a standard model like gemini-1.5-pro"
-      ;;
-  esac
-fi
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# Stop any running containers
-echo "Stopping any running containers..."
-docker stop $(docker ps -q --filter ancestor=gcp-release-notes-dashboard:local) 2>/dev/null || true
-
-# Build the Docker image
-echo "Building Docker image with backend/.env.prod..."
-echo "Using GEMINI_MODEL: $GEMINI_MODEL"
-docker build \
-  --build-arg BACKEND_ENV_FILE=backend/.env.prod \
-  --build-arg GEMINI_API_KEY="$GEMINI_API_KEY" \
-  --build-arg GEMINI_MODEL="$GEMINI_MODEL" \
-  -t gcp-release-notes-dashboard:local .
-
-# Run the container with environment variables
-echo "Starting container..."
-docker run -d -p 5173:5173 \
-  -e GEMINI_API_KEY="$GEMINI_API_KEY" \
-  -e GEMINI_MODEL="$GEMINI_MODEL" \
-  gcp-release-notes-dashboard:local
-
-# Test container health and configuration
-echo "Waiting for container to start..."
-sleep 5
-CONTAINER_ID=$(docker ps -q --filter ancestor=gcp-release-notes-dashboard:local)
-if [ -z "$CONTAINER_ID" ]; then
-  echo "ERROR: Container failed to start. Check docker logs."
-else
-  echo "Container started with ID: $CONTAINER_ID"
-  echo "Checking environment variables in container..."
-  docker exec $CONTAINER_ID env | grep -E "BIGQUERY|GEMINI"
-  echo "Testing API endpoint..."
-  curl -s http://localhost:5173/api/health || echo "Health endpoint not accessible."
-fi
+# Print section header
+print_header() {
+  echo -e "\n${YELLOW}===== $1 =====${NC}\n"
+}
 
 # Print success message
-echo "=================================================="
-echo "Application is now running!"
-echo -e "\033[1;33mIMPORTANT: Access using HTTP only (not HTTPS):\033[0m"
-echo -e "\033[1;32mhttp://$EXTERNAL_IP:5173\033[0m"
-echo "=================================================="
-echo "NOTE: The application will work on ANY machine or IP address"
-echo "      The URL above is just for your convenience"
-echo "=================================================="
-echo "If you see SSL errors in your browser, make sure:"
-echo "1. You're using http:// (not https://) in the URL"
-echo "2. Try clearing your browser cache or use incognito mode"
-echo "3. Some browsers may force HTTPS - try a different browser"
-echo "=================================================="
-echo "If you see database errors or the 'Failed to load release notes' message:"
-echo "1. Check if your BigQuery dataset exists: $BIGQUERY_DATASET"
-echo "2. Verify permissions and project access"
-echo "3. Check Docker logs: docker logs $CONTAINER_ID"
-echo "==================================================" 
+print_success() {
+  echo -e "${GREEN}✓ $1${NC}"
+}
+
+# Print error message
+print_error() {
+  echo -e "${RED}✗ $1${NC}"
+}
+
+# Check if a command exists
+check_command() {
+  if ! command -v $1 &> /dev/null; then
+    print_error "$1 is required but not installed. Please install it first."
+    exit 1
+  fi
+}
+
+# Check for required commands
+check_command "docker"
+
+# Stop and remove existing container if running
+print_header "Checking for existing container"
+if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+  echo "Stopping existing container: $CONTAINER_NAME"
+  docker stop $CONTAINER_NAME
+fi
+
+if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+  echo "Removing existing container: $CONTAINER_NAME"
+  docker rm $CONTAINER_NAME
+fi
+
+# Build the Docker image
+print_header "Building Docker image"
+docker build \
+  --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+  --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
+  -t $IMAGE_NAME .
+
+# Check if build was successful
+if [ $? -ne 0 ]; then
+  print_error "Docker build failed. See error messages above."
+  exit 1
+fi
+
+print_success "Docker image built successfully"
+
+# Verify the image was created
+if [[ "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
+  print_error "Image was not created successfully."
+  exit 1
+fi
+
+# Run a diagnostic check on the built image
+print_header "Running diagnostics on built image"
+docker run --rm $IMAGE_NAME find /usr/src/app/public -type f | sort
+
+# Run the container
+print_header "Starting container"
+docker run \
+  --name $CONTAINER_NAME \
+  -p $PORT:$PORT \
+  -e PORT=$PORT \
+  -e NODE_ENV=production \
+  -d \
+  $IMAGE_NAME
+
+# Check if container started successfully
+if [ $? -ne 0 ]; then
+  print_error "Failed to start container."
+  exit 1
+fi
+
+print_success "Container started successfully"
+
+# Get container logs
+print_header "Container logs (first 20 lines)"
+docker logs $CONTAINER_NAME --tail 20
+
+# Print access information
+print_header "Access Information"
+echo "The application is now running."
+echo "Local access: http://localhost:$PORT"
+echo ""
+echo "For Cloud Run, deploy with:"
+echo "gcloud run deploy gcp-release-notes-dashboard \\"
+echo "  --image gcr.io/YOUR_PROJECT_ID/$IMAGE_NAME \\"
+echo "  --platform managed \\"
+echo "  --region us-central1 \\"
+echo "  --allow-unauthenticated \\"
+echo "  --port $PORT"
+echo ""
+echo "To test endpoints:"
+echo "- Main application: http://localhost:$PORT/"
+echo "- Static test page: http://localhost:$PORT/static-test"
+echo "- Debug endpoint: http://localhost:$PORT/debug"
+echo "- Test endpoint: http://localhost:$PORT/test"
+echo "- Static file test: http://localhost:$PORT/static-file-test/index.html"
+echo ""
+echo "If the application doesn't work in Cloud Run but works locally:"
+echo "1. Check that the public directory is correctly copied to the container"
+echo "2. Verify that the frontend assets are built and placed in backend/public"
+echo "3. Check the Cloud Run logs for any errors"
+echo "4. Try visiting /static-test, /debug, and /test to diagnose issues"
+
+# Add instructions for debugging Cloud Run
+print_header "Debugging Cloud Run"
+echo "If the app is deployed to Cloud Run but not working:"
+echo "1. Check the Cloud Run logs for errors"
+echo "2. Visit https://YOUR-APP-URL/static-test to verify server is running"
+echo "3. Visit https://YOUR-APP-URL/debug to check frontend file availability"
+echo "4. If index.html exists but assets are missing, rebuild with better debugging"
+echo "5. Use the diagnostic endpoints to identify the specific issue" 
