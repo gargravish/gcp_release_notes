@@ -316,6 +316,157 @@ app.get('/static-file-test/:filename', (req, res) => {
   }
 });
 
+// Add specific endpoint to check all assets and troubleshoot loading problems
+app.get('/check-assets', (req, res) => {
+  const publicPath = path.join(__dirname, '../public');
+  
+  interface AssetFile {
+    name: string;
+    path?: string;
+    size?: number;
+    isFile?: boolean;
+    url?: string;
+    error?: string;
+  }
+  
+  interface Reference {
+    type: string;
+    url: string;
+    exists: boolean;
+  }
+  
+  interface AssetsCheckResult {
+    root: {
+      exists: boolean;
+      isDirectory: boolean;
+    };
+    assets: {
+      directory: {
+        path: string;
+        exists: boolean;
+        isDirectory: boolean;
+      };
+      files: AssetFile[];
+      error?: string;
+    };
+    index: {
+      path: string;
+      exists: boolean;
+      isFile: boolean;
+      size: number;
+      content: string | null;
+      references: Reference[];
+      error?: string;
+    };
+    httpAccess: {
+      indexUrl: string;
+      assetsBaseUrl: string;
+      staticServing: boolean;
+      routes: Array<{
+        path: string;
+        methods: string[];
+      }>;
+    };
+  }
+  
+  const results: AssetsCheckResult = {
+    root: {
+      exists: fs.existsSync(publicPath),
+      isDirectory: fs.existsSync(publicPath) ? fs.statSync(publicPath).isDirectory() : false
+    },
+    assets: {
+      directory: {
+        path: path.join(publicPath, 'assets'),
+        exists: fs.existsSync(path.join(publicPath, 'assets')),
+        isDirectory: fs.existsSync(path.join(publicPath, 'assets')) ? 
+                    fs.statSync(path.join(publicPath, 'assets')).isDirectory() : false
+      },
+      files: []
+    },
+    index: {
+      path: path.join(publicPath, 'index.html'),
+      exists: fs.existsSync(path.join(publicPath, 'index.html')),
+      isFile: fs.existsSync(path.join(publicPath, 'index.html')) ? 
+              fs.statSync(path.join(publicPath, 'index.html')).isFile() : false,
+      size: fs.existsSync(path.join(publicPath, 'index.html')) ? 
+            fs.statSync(path.join(publicPath, 'index.html')).size : 0,
+      content: null,
+      references: []
+    },
+    httpAccess: {
+      indexUrl: `${req.protocol}://${req.get('host')}/index.html`,
+      assetsBaseUrl: `${req.protocol}://${req.get('host')}/assets/`,
+      staticServing: express.static.toString().length > 0,
+      routes: app._router.stack
+        .filter((r: any) => r.route && r.route.path)
+        .map((r: any) => ({
+          path: r.route.path,
+          methods: Object.keys(r.route.methods).filter(m => r.route.methods[m])
+        }))
+    }
+  };
+
+  // Check assets directory content
+  if (results.assets.directory.exists) {
+    try {
+      const assetFiles = fs.readdirSync(path.join(publicPath, 'assets'));
+      assetFiles.forEach(file => {
+        const filePath = path.join(publicPath, 'assets', file);
+        try {
+          results.assets.files.push({
+            name: file,
+            path: filePath,
+            size: fs.statSync(filePath).size,
+            isFile: fs.statSync(filePath).isFile(),
+            url: `${req.protocol}://${req.get('host')}/assets/${file}`
+          });
+        } catch (err) {
+          results.assets.files.push({
+            name: file,
+            error: (err as Error).message
+          });
+        }
+      });
+    } catch (err) {
+      results.assets.error = (err as Error).message;
+    }
+  }
+
+  // Check index.html content for script/css references
+  if (results.index.exists) {
+    try {
+      const content = fs.readFileSync(path.join(publicPath, 'index.html'), 'utf8');
+      // Just get the first 500 chars for preview
+      results.index.content = content.substring(0, 500) + (content.length > 500 ? '...' : '');
+      
+      // Find script and link tags
+      const scriptRegex = /<script[^>]*src=["']([^"']+)["'][^>]*>/g;
+      const linkRegex = /<link[^>]*href=["']([^"']+)["'][^>]*>/g;
+      
+      let match;
+      while ((match = scriptRegex.exec(content)) !== null) {
+        results.index.references.push({
+          type: 'script',
+          url: match[1],
+          exists: fs.existsSync(path.join(publicPath, match[1].replace(/^\//, '')))
+        });
+      }
+      
+      while ((match = linkRegex.exec(content)) !== null) {
+        results.index.references.push({
+          type: 'link',
+          url: match[1],
+          exists: fs.existsSync(path.join(publicPath, match[1].replace(/^\//, '')))
+        });
+      }
+    } catch (err) {
+      results.index.error = (err as Error).message;
+    }
+  }
+
+  res.json(results);
+});
+
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res, next) => {
   // Skip API and health check routes
@@ -374,10 +525,21 @@ app.get('*', (req, res, next) => {
             <li><a href="/health">/health</a> - Health check endpoint</li>
             <li><a href="/debug">/debug</a> - Debug endpoint with detailed information</li>
             <li><a href="/test">/test</a> - Test endpoint for frontend diagnosis</li>
+            <li><a href="/check-assets">/check-assets</a> - <strong>NEW!</strong> Advanced asset diagnostics</li>
             <li><a href="/static-file-test/index.html">/static-file-test/index.html</a> - Test specific file accessibility</li>
             <li><a href="/static-file-test/assets/index-DLnPPNGv.css">/static-file-test/assets/index-DLnPPNGv.css</a> - Test CSS asset</li>
             <li><a href="/">/</a> - Main application (requires frontend assets)</li>
           </ul>
+        </div>
+        <div class="card">
+          <h2>Troubleshooting Tips</h2>
+          <ol>
+            <li>Check if all the diagnostic endpoints work correctly. If they do, the server is running properly.</li>
+            <li>Use the <code>/check-assets</code> endpoint to see details about how your assets are being served.</li>
+            <li>If assets aren't loading, check if the file paths in the generated HTML match the actual paths on the server.</li>
+            <li>Try rebuilding the container with <code>docker build</code> to ensure all assets are properly copied.</li>
+            <li>Verify that the <code>/assets</code> directory contains the expected files with <code>/debug</code> endpoint.</li>
+          </ol>
         </div>
       </body>
       </html>
