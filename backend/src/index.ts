@@ -6,7 +6,14 @@ import { ReleaseNotesController } from './controllers/release-notes.controller';
 import { config } from './config';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { VisitorCounterController } from './controllers/visitor-counter.controller';
+
+// Add proper type definitions for the file check functions
+interface FileInfo {
+  path: string;
+  size: number;
+}
 
 const app = express();
 const controller = new ReleaseNotesController();
@@ -128,55 +135,54 @@ app.get('/health', (req, res) => {
 
 // Debug endpoint to check request and environment information
 app.get('/debug', (req, res) => {
-  // Find all static assets in the public directory
-  const publicDir = path.join(__dirname, '../public');
-  let frontendFiles = [];
-  let missingCriticalFiles = [];
+  // Check frontend files and log the results
+  const frontendFiles: FileInfo[] = [];
+  const missingCriticalFiles: string[] = [];
+  const publicPath = path.join(__dirname, '../public');
   
-  try {
-    const listFiles = (dir) => {
-      const files = require('fs').readdirSync(dir);
+  // Function to recursively scan a directory and collect file info
+  const scanDirectory = (dir: string): void => {
+    try {
+      const files = fs.readdirSync(dir);
       files.forEach(file => {
         const filePath = path.join(dir, file);
-        const stats = require('fs').statSync(filePath);
+        const stats = fs.statSync(filePath);
+        
         if (stats.isDirectory()) {
-          listFiles(filePath); // Recursively list files in subdirectories
+          scanDirectory(filePath);
         } else {
-          frontendFiles.push(filePath.replace(publicDir, ''));
-          
-          // Check if any critical frontend files are missing
-          if (file === 'index.html' || file.endsWith('.js') || file.endsWith('.css')) {
-            const fileContent = require('fs').readFileSync(filePath, 'utf8');
-            if (fileContent.length < 10) { // If file seems empty or corrupted
-              missingCriticalFiles.push(file + ' (empty or corrupted)');
-            }
-          }
+          frontendFiles.push({
+            path: filePath.replace(publicPath, ''),
+            size: stats.size
+          });
         }
       });
-    };
-    
-    if (require('fs').existsSync(publicDir)) {
-      listFiles(publicDir);
+    } catch (err) {
+      console.error(`Error scanning directory ${dir}:`, err);
     }
-  } catch (err) {
-    console.error('Error reading frontend files:', err);
-  }
+  };
   
-  // Check for common frontend issues
-  const indexPath = path.join(__dirname, '../public/index.html');
-  let indexContent = '';
-  let indexIssues = [];
-  
-  if (require('fs').existsSync(indexPath)) {
-    indexContent = require('fs').readFileSync(indexPath, 'utf8').slice(0, 500) + '...'; // Get first 500 chars
+  // Check if critical files exist
+  const checkCriticalFiles = (): void => {
+    const criticalFiles = [
+      '/index.html',
+      '/assets/main.js',
+      '/assets/main.css'
+    ];
     
-    // Check for common frontend issues in index.html
-    if (!indexContent.includes('<!DOCTYPE html>')) {
-      indexIssues.push('Missing DOCTYPE');
-    }
-    if (!indexContent.includes('<div id="root"></div>') && !indexContent.includes('<div id="app"></div>')) {
-      indexIssues.push('Missing root/app div');
-    }
+    criticalFiles.forEach(file => {
+      if (!frontendFiles.some(f => f.path === file)) {
+        missingCriticalFiles.push(file);
+      }
+    });
+  };
+  
+  // Scan frontend files if the public directory exists
+  if (fs.existsSync(publicPath)) {
+    scanDirectory(publicPath);
+    checkCriticalFiles();
+  } else {
+    missingCriticalFiles.push('public directory not found');
   }
   
   res.json({
@@ -189,187 +195,16 @@ app.get('/debug', (req, res) => {
     protocol: req.protocol,
     secure: req.secure,
     hostname: req.hostname,
-    publicPath: publicDir,
-    publicExists: require('fs').existsSync(publicDir),
-    indexExists: require('fs').existsSync(indexPath),
-    frontendFileCount: frontendFiles.length,
-    frontendAssets: frontendFiles.filter(f => f.endsWith('.js') || f.endsWith('.css')),
-    missingCriticalFiles,
-    indexContent,
-    indexIssues,
+    publicPath: publicPath,
+    publicExists: fs.existsSync(publicPath),
+    indexExists: fs.existsSync(path.join(publicPath, 'index.html')),
+    frontendFiles: frontendFiles.length,
+    missingCriticalFiles: missingCriticalFiles.length > 0 ? missingCriticalFiles : 'None',
     env: {
       NODE_ENV: process.env.NODE_ENV,
       PORT: process.env.PORT
     }
   });
-});
-
-// Add a special debug endpoint to see frontend status
-app.get('/debug-frontend', (req, res) => {
-  let html = `<!DOCTYPE html>
-<html>
-<head>
-  <title>Frontend Debug</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #333; }
-    .status { margin: 20px 0; padding: 10px; border-radius: 5px; }
-    .success { background-color: #dff0d8; border: 1px solid #d6e9c6; }
-    .error { background-color: #f2dede; border: 1px solid #ebccd1; }
-    pre { background: #f5f5f5; padding: 10px; overflow: auto; }
-  </style>
-</head>
-<body>
-  <h1>Frontend Debug Information</h1>`;
-
-  // Check for index.html
-  const publicDir = path.join(__dirname, '../public');
-  const indexPath = path.join(publicDir, 'index.html');
-  
-  if (require('fs').existsSync(indexPath)) {
-    html += `<div class="status success">index.html exists ✅</div>`;
-    
-    try {
-      const indexContent = require('fs').readFileSync(indexPath, 'utf8');
-      const firstFew = indexContent.slice(0, 200).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      html += `<h3>First 200 characters of index.html:</h3><pre>${firstFew}...</pre>`;
-    } catch (err) {
-      html += `<div class="status error">Error reading index.html: ${err.message}</div>`;
-    }
-  } else {
-    html += `<div class="status error">index.html does NOT exist ❌</div>`;
-  }
-  
-  // List JS and CSS files
-  html += `<h3>JavaScript and CSS files:</h3>`;
-  try {
-    const findAssets = (dir, assets = []) => {
-      const files = require('fs').readdirSync(dir);
-      files.forEach(file => {
-        const filePath = path.join(dir, file);
-        const stats = require('fs').statSync(filePath);
-        if (stats.isDirectory()) {
-          findAssets(filePath, assets);
-        } else if (file.endsWith('.js') || file.endsWith('.css')) {
-          assets.push({
-            path: filePath.replace(publicDir, ''),
-            size: stats.size
-          });
-        }
-      });
-      return assets;
-    };
-    
-    const assets = findAssets(publicDir);
-    
-    if (assets.length > 0) {
-      html += `<div class="status success">Found ${assets.length} JavaScript/CSS files</div>`;
-      html += `<ul>`;
-      assets.forEach(asset => {
-        html += `<li>${asset.path} (${Math.round(asset.size / 1024)}KB)</li>`;
-      });
-      html += `</ul>`;
-    } else {
-      html += `<div class="status error">No JavaScript or CSS files found!</div>`;
-    }
-  } catch (err) {
-    html += `<div class="status error">Error listing assets: ${err.message}</div>`;
-  }
-  
-  // Add a test script to check if JS execution works
-  html += `
-  <h3>JavaScript Execution Test:</h3>
-  <div id="js-test">Testing JavaScript execution...</div>
-  <script>
-    document.getElementById('js-test').innerHTML = 'JavaScript is working properly! ✅';
-  </script>
-  
-  <h3>Request Information:</h3>
-  <pre>
-  URL: ${req.url}
-  Protocol: ${req.protocol}
-  Host: ${req.headers.host}
-  User-Agent: ${req.headers['user-agent']}
-  X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'not set'}
-  </pre>
-  </body>
-  </html>`;
-  
-  res.setHeader('Content-Type', 'text/html');
-  res.send(html);
-});
-
-// Create a simple test HTML page to check if static HTML files are working
-app.get('/test.html', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Static HTML Test</title>
-    </head>
-    <body>
-      <h1>Static HTML Test Page</h1>
-      <p>If you can see this, the server is correctly serving static HTML files.</p>
-      <p>Time: ${new Date().toISOString()}</p>
-      <p>Protocol: ${req.protocol}</p>
-      <p>Host: ${req.headers.host}</p>
-    </body>
-    </html>
-  `);
-});
-
-// Add a fallback HTML page for when things aren't working
-app.get('/fallback.html', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Fallback Page</title>
-      <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .container { margin-top: 40px; }
-        h1 { color: #333; }
-        pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow: auto; }
-        .info { background: #e9f7fe; border-left: 4px solid #2196F3; padding: 16px; margin: 16px 0; }
-        .steps { background: #fff8e1; border-left: 4px solid #ffb300; padding: 16px; margin: 16px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>GCP Release Notes Dashboard - Fallback</h1>
-        <div class="info">
-          <h2>Diagnostic Information</h2>
-          <p>This is a fallback page to help diagnose issues with the application.</p>
-          <pre>
-Time: ${new Date().toISOString()}
-URL: ${req.url}
-Protocol: ${req.protocol}
-Host: ${req.headers.host}
-Path: ${req.path}
-User Agent: ${req.headers['user-agent']}
-IP: ${req.ip}
-X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'not set'}
-          </pre>
-        </div>
-        
-        <div class="steps">
-          <h2>Troubleshooting Steps</h2>
-          <ol>
-            <li>Try accessing the <a href="/debug">debug endpoint</a> for detailed diagnostics</li>
-            <li>Try the <a href="/debug-frontend">frontend debug page</a> to check frontend assets</li>
-            <li>Clear your browser cache completely and try again</li>
-            <li>Try accessing the app in a different browser</li>
-            <li>Try accessing the <a href="/test.html">static test page</a> to verify basic HTML serving</li>
-          </ol>
-        </div>
-        
-        <p>
-          If you're still experiencing issues, please check the server logs for more detailed information.
-        </p>
-      </div>
-    </body>
-    </html>
-  `);
 });
 
 // Serve static files from the frontend build directory
@@ -396,12 +231,7 @@ app.use(express.static(path.join(__dirname, '../public'), {
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res, next) => {
   // Skip API and health check routes
-  if (req.path.startsWith('/api/') || 
-      req.path === '/health' || 
-      req.path === '/debug' || 
-      req.path === '/debug-frontend' ||
-      req.path === '/test.html' ||
-      req.path === '/fallback.html') {
+  if (req.path.startsWith('/api/') || req.path === '/health' || req.path === '/debug') {
     return next();
   }
   
@@ -411,36 +241,11 @@ app.get('*', (req, res, next) => {
   const indexPath = path.join(__dirname, '../public/index.html');
   
   // Check if the index.html file exists
-  if (require('fs').existsSync(indexPath)) {
-    console.log('Sending index.html for path:', req.path);
-    
-    try {
-      // First check if the file is readable and not empty
-      const indexContent = require('fs').readFileSync(indexPath, 'utf8');
-      if (indexContent.length < 100) {
-        console.error('ERROR: index.html file is too small, may be corrupted:', indexContent);
-        return res.redirect('/fallback.html');
-      }
-      
-      // Add proper headers for the HTML content
-      res.setHeader('Content-Type', 'text/html; charset=UTF-8');
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          console.error('Error sending index.html:', err);
-          res.redirect('/fallback.html');
-        }
-      });
-    } catch (err) {
-      console.error('Error reading index.html:', err);
-      res.redirect('/fallback.html');
-    }
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
   } else {
     console.error('ERROR: Frontend index.html not found at', indexPath);
-    res.redirect('/fallback.html');
+    res.status(500).send('Server configuration error: Frontend not properly built');
   }
 });
 

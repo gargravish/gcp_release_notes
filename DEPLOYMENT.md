@@ -153,41 +153,74 @@ The application sets appropriate headers for both HTTP and HTTPS:
 - Cache control headers prevent browser caching issues 
 - CORS is configured to work with all origins
 
+### Enhanced Debugging 
+The application now includes extensive debugging capabilities:
+
+1. `/debug` endpoint provides detailed information about:
+   - Request headers and environment
+   - Runtime configuration 
+   - Frontend asset status and organization
+   - Missing critical files detection
+
+2. Log output for key operations:
+   - Request processing details
+   - Static file serving
+   - HTTPS redirect handling
+   - Error conditions with stack traces
+
 ### Troubleshooting HTTPS Issues
 If you encounter HTTPS-related issues in Cloud Run:
 
 1. Check the application logs for any redirect errors:
    ```bash
-   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:proto"
+   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Redirecting to HTTPS'"
    ```
 
 2. Verify that your application is detecting the `X-Forwarded-Proto` header correctly:
    ```bash
-   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:headers"
+   gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Request info'"
    ```
 
-3. Ensure `trust proxy` is set in the application (already configured in the codebase):
-   ```javascript
-   app.set('trust proxy', true);
+3. Check for frontend asset loading issues:
+   ```bash
+   curl https://gcp-release-notes-486097256786.us-central1.run.app/debug | jq '.missingCriticalFiles'
    ```
+
+4. Ensure `trust proxy` is set in the application (already configured in the codebase):
+   ```javascript
+   app.set('trust proxy', 1);
+   ```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+1. **Cannot Access Application from External IP**
+   - Verify the application is binding to all interfaces (0.0.0.0):
+     ```bash
+     # Check what addresses the application is listening on
+     sudo netstat -tulpn | grep 5173
+     ```
+   - Ensure firewall rules are correctly set up
+   - Check VM network tags
+
+2. **Container Build Failures**
+   - Verify environment files are correctly set up
+   - Check Docker build logs for errors
+   - Ensure all required environment variables are set
+
+3. **API Connection Issues**
+   - Verify that required Google Cloud APIs are enabled
+   - Check service account permissions
+   - Ensure Firestore is properly configured
 
 4. **HTTPS and Redirect Issues**
    - Check if your Cloud Run service is being accessed at the correct URL
    - Verify request headers in the application logs
    - Check the browser console for mixed content warnings
-   - Use the built-in debug endpoints to troubleshoot:
+   - Use the built-in `/debug` endpoint to check request and runtime information:
      ```bash
-     # Basic debug information (JSON format)
      curl https://gcp-release-notes-486097256786.us-central1.run.app/debug
-     
-     # Frontend-specific debug page (HTML format)
-     curl https://gcp-release-notes-486097256786.us-central1.run.app/debug-frontend
-     
-     # Simple static HTML test page
-     curl https://gcp-release-notes-486097256786.us-central1.run.app/test.html
-     
-     # Fallback page if frontend is not loading
-     curl https://gcp-release-notes-486097256786.us-central1.run.app/fallback.html
      ```
    - Examine detailed logs for redirect handling:
      ```bash
@@ -198,12 +231,6 @@ If you encounter HTTPS-related issues in Cloud Run:
      gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Serving static file'"
      ```
    - If you see issues with the frontend assets, check the build process in your Dockerfile to ensure the static files are correctly copied to the backend/public directory
-   - For persistent frontend issues, try the following:
-     1. Clear your browser cache completely (Ctrl+Shift+Delete or Cmd+Shift+Delete)
-     2. Try accessing the app in an incognito/private window
-     3. Try a different browser entirely
-     4. Check the network tab in browser developer tools for any failed asset loads
-     5. If on a corporate network, check if any content policies might be affecting the app
 
 5. **Rate Limiting Issues**
    - The application uses express-rate-limit to prevent abuse
@@ -227,6 +254,48 @@ If you encounter HTTPS-related issues in Cloud Run:
        });
      });
      ```
+
+6. **TypeScript Build Errors**
+   - If you encounter TypeScript errors during build, check:
+     - Proper type annotations for all variables and functions
+     - Import statements for required modules
+     - Interface definitions for custom types
+   - TypeScript configuration in `tsconfig.json` may need adjustments:
+     ```bash
+     # Check your current TypeScript configuration 
+     cat backend/tsconfig.json
+     ```
+   - For quick fixes, you can bypass TypeScript checks during development:
+     ```bash
+     # Add this script to package.json
+     "build:no-check": "tsc --skipLibCheck"
+     ```
+
+## Quick Reference Commands
+
+### Build and Deploy
+```bash
+# Local build and test
+npm run install:all
+npm run build
+npm start
+
+# Manual deployment
+docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
+             --build-arg FRONTEND_ENV_FILE=frontend/.env.production \
+             -t gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest .
+docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
+gcloud run deploy gcp-release-notes-dashboard --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest --region=us-central1 --platform=managed --allow-unauthenticated --port=5173
+```
+
+### Monitoring
+```bash
+# View logs
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard"
+
+# Get service URL
+gcloud run services describe gcp-release-notes-dashboard --platform=managed --region=us-central1 --format='value(status.url)'
+```
 
 ## Step 3: Deploy to Google Compute Engine (Alternative)
 
@@ -303,19 +372,9 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
    - Check if your Cloud Run service is being accessed at the correct URL
    - Verify request headers in the application logs
    - Check the browser console for mixed content warnings
-   - Use the built-in debug endpoints to troubleshoot:
+   - Use the built-in `/debug` endpoint to check request and runtime information:
      ```bash
-     # Basic debug information (JSON format)
      curl https://gcp-release-notes-486097256786.us-central1.run.app/debug
-     
-     # Frontend-specific debug page (HTML format)
-     curl https://gcp-release-notes-486097256786.us-central1.run.app/debug-frontend
-     
-     # Simple static HTML test page
-     curl https://gcp-release-notes-486097256786.us-central1.run.app/test.html
-     
-     # Fallback page if frontend is not loading
-     curl https://gcp-release-notes-486097256786.us-central1.run.app/fallback.html
      ```
    - Examine detailed logs for redirect handling:
      ```bash
@@ -326,12 +385,6 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
      gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Serving static file'"
      ```
    - If you see issues with the frontend assets, check the build process in your Dockerfile to ensure the static files are correctly copied to the backend/public directory
-   - For persistent frontend issues, try the following:
-     1. Clear your browser cache completely (Ctrl+Shift+Delete or Cmd+Shift+Delete)
-     2. Try accessing the app in an incognito/private window
-     3. Try a different browser entirely
-     4. Check the network tab in browser developer tools for any failed asset loads
-     5. If on a corporate network, check if any content policies might be affecting the app
 
 5. **Rate Limiting Issues**
    - The application uses express-rate-limit to prevent abuse
@@ -356,6 +409,22 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
      });
      ```
 
+6. **TypeScript Build Errors**
+   - If you encounter TypeScript errors during build, check:
+     - Proper type annotations for all variables and functions
+     - Import statements for required modules
+     - Interface definitions for custom types
+   - TypeScript configuration in `tsconfig.json` may need adjustments:
+     ```bash
+     # Check your current TypeScript configuration 
+     cat backend/tsconfig.json
+     ```
+   - For quick fixes, you can bypass TypeScript checks during development:
+     ```bash
+     # Add this script to package.json
+     "build:no-check": "tsc --skipLibCheck"
+     ```
+
 ## Quick Reference Commands
 
 ### Build and Deploy
@@ -372,12 +441,3 @@ docker build --build-arg BACKEND_ENV_FILE=backend/.env.prod \
 docker push gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest
 gcloud run deploy gcp-release-notes-dashboard --image=gcr.io/YOUR_PROJECT_ID/gcp-release-notes-dashboard:latest --region=us-central1 --platform=managed --allow-unauthenticated --port=5173
 ```
-
-### Monitoring
-```bash
-# View logs
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes-dashboard"
-
-# Get service URL
-gcloud run services describe gcp-release-notes-dashboard --platform=managed --region=us-central1 --format='value(status.url)'
-``` 
