@@ -53,8 +53,11 @@ RUN if [ -f "$FRONTEND_ENV_FILE" ] && [ "$FRONTEND_ENV_FILE" != "frontend/.env" 
 # Debug frontend environment
 RUN echo "=== Frontend Environment ===" && ls -la frontend && echo "===================="
 
-# Build frontend with Vite
+# Fix the index.html file to ensure it works with HTTPS
 WORKDIR /usr/src/app/frontend
+RUN sed -i 's|<script type="module" src="/src/main.tsx"></script>|<script type="module" src="/assets/index-B_K7oHGR.js"></script>|g' index.html || echo "Failed to update index.html script reference"
+
+# Build frontend with Vite
 RUN npm run build:no-check
 
 # Debug frontend build output with more detailed information
@@ -64,10 +67,16 @@ RUN if [ -d "frontend/dist/assets" ]; then echo "=== Frontend Assets Directory =
 RUN if [ -d "frontend/dist" ]; then echo "=== Frontend dist contents recursive ===" && find frontend/dist -type f | sort && echo "============================="; fi
 
 # Create public directory in backend for frontend assets
-RUN mkdir -p backend/public
+RUN mkdir -p backend/public/assets
 
 # Copy frontend build to backend/public with more verification
 RUN cp -r frontend/dist/* backend/public/ || { echo "Failed to copy frontend/dist to backend/public"; exit 1; }
+
+# Verify assets directory was copied correctly
+RUN if [ ! -d "backend/public/assets" ]; then mkdir -p backend/public/assets; echo "Creating assets directory that was missing"; fi
+
+# Copy assets directory separately to ensure it exists
+RUN cp -r frontend/dist/assets/* backend/public/assets/ || { echo "Warning: Unable to copy assets directory specifically"; }
 
 # Make sure index.html exists in backend/public
 RUN if [ ! -f "backend/public/index.html" ]; then echo "ERROR: index.html not found in backend/public"; exit 1; fi
@@ -101,6 +110,9 @@ RUN npm install --only=production
 COPY --from=build /usr/src/app/backend/dist ./dist
 COPY --from=build /usr/src/app/backend/public ./public
 
+# Ensure public directory has correct permissions
+RUN chmod -R 755 ./public
+
 # Debug the public directory in production stage
 RUN echo "=== Production Public Directory ===" && ls -la public && echo "==================================="
 RUN if [ -d "public/assets" ]; then echo "=== Production Public Assets Directory ===" && ls -la public/assets && echo "=========================================="; fi
@@ -119,9 +131,11 @@ ENV BIGQUERY_TABLE=release_notes
 ENV GOOGLE_CLOUD_PROJECT=raves-altostrat
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
 ENV GEMINI_MODEL=$GEMINI_MODEL
+ENV NODE_ENV=production
+ENV PORT=5173
 
 # Expose port
 EXPOSE 5173
 
 # Start the application with explicit host binding and log environment variables
-CMD ["sh", "-c", "echo 'Starting with:' && env | grep -E 'BIGQUERY|GEMINI' | sed 's/GEMINI_API_KEY=.*/GEMINI_API_KEY=****/g' && node dist/index.js --host 0.0.0.0"] 
+CMD ["sh", "-c", "echo 'Starting with:' && env | grep -E 'BIGQUERY|GEMINI|NODE_ENV|PORT' | sed 's/GEMINI_API_KEY=.*/GEMINI_API_KEY=****/g' && node dist/index.js --host 0.0.0.0"] 

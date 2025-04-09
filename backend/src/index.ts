@@ -58,6 +58,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Log all requests for debugging
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.path} (${req.get('x-forwarded-proto') || req.protocol})`);
+  next();
+});
+
 // Middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
@@ -279,6 +285,13 @@ app.use(express.static(path.join(__dirname, '../public'), {
   }
 }));
 
+// Also serve assets directly to handle direct asset requests
+app.use('/assets', express.static(path.join(__dirname, '../public/assets'), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true,
+}));
+
 // New endpoint to verify static file serving directly
 app.get('/static-file-test/:filename', (req, res) => {
   const filename = req.params.filename;
@@ -310,7 +323,8 @@ app.get('*', (req, res, next) => {
       req.path === '/health' || 
       req.path === '/debug' || 
       req.path === '/test' ||
-      req.path.startsWith('/static-file-test/')) {
+      req.path.startsWith('/static-file-test/') ||
+      req.path.startsWith('/assets/')) {  // Skip asset paths too
     return next();
   }
   
@@ -347,6 +361,14 @@ app.get('*', (req, res, next) => {
           <p>Host: ${req.headers.host}</p>
         </div>
         <div class="card">
+          <h2>Direct Asset Access Test</h2>
+          <p>Try accessing these assets directly:</p>
+          <ul>
+            <li><a href="/assets/index-DLnPPNGv.css" target="_blank">/assets/index-DLnPPNGv.css</a></li>
+            <li><a href="/assets/index-B_K7oHGR.js" target="_blank">/assets/index-B_K7oHGR.js</a></li>
+          </ul>
+        </div>
+        <div class="card">
           <h2>Available Test Endpoints</h2>
           <ul>
             <li><a href="/health">/health</a> - Health check endpoint</li>
@@ -376,6 +398,9 @@ app.get('*', (req, res, next) => {
     try {
       const indexContent = fs.readFileSync(indexPath, 'utf8');
       console.log(`Successfully read index.html, size: ${indexContent.length} bytes`);
+      
+      // For debugging: Log the first 200 characters of index.html
+      console.log('index.html preview:', indexContent.substring(0, 200));
       
       res.sendFile(indexPath, (err) => {
         if (err) {

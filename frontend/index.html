@@ -2,21 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Force HTTP content and prevent automatic HTTPS upgrade -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http:; style-src 'self' 'unsafe-inline' http:; img-src 'self' data: http:; connect-src 'self' http:;">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta name="description" content="Interactive dashboard for exploring GCP release notes" />
+    <meta name="theme-color" content="#1a73e8" />
     <title>GCP Release Notes Dashboard</title>
-    <!-- Force HTTP redirect script -->
+    <!-- Ensure proper base URL for assets -->
+    <base href="/" />
+    <!-- Proper CSP for production -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; connect-src 'self' https:;">
+    <!-- Debugging script to help diagnose asset loading issues -->
     <script>
-      if (window.location.protocol === 'https:') {
-        window.location.href = window.location.href.replace('https:', 'http:');
-      }
+      window.addEventListener('DOMContentLoaded', function() {
+        // Create a debugging element
+        var debugDiv = document.createElement('div');
+        debugDiv.id = 'asset-debug';
+        debugDiv.style = 'position: fixed; bottom: 0; right: 0; background: rgba(0,0,0,0.8); color: white; padding: 10px; max-width: 400px; max-height: 200px; overflow: auto; font-family: monospace; font-size: 12px; z-index: 9999;';
+        
+        // Try to load some assets to see if they're available
+        var assets = [
+          '/assets/index-DLnPPNGv.css',
+          '/assets/index-B_K7oHGR.js',
+          '/assets/index-BvuoHF1N.js'
+        ];
+        
+        var results = '';
+        assets.forEach(function(asset) {
+          var xhr = new XMLHttpRequest();
+          xhr.open('HEAD', asset, false);
+          try {
+            xhr.send();
+            results += asset + ': ' + xhr.status + '<br>';
+          } catch(e) {
+            results += asset + ': Error - ' + e.message + '<br>';
+          }
+        });
+        
+        debugDiv.innerHTML = '<h4>Asset Test Results</h4>' + results + 
+                            '<p>Page URL: ' + window.location.href + '</p>' +
+                            '<p>Base URL: ' + document.baseURI + '</p>';
+        document.body.appendChild(debugDiv);
+      });
     </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/assets/index-B_K7oHGR.js"></script>
   </body>
 </html> 

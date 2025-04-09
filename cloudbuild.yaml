@@ -1,7 +1,15 @@
 steps:
-  # Build the container image
+  # Build the container image with build arguments
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/gcp-release-notes-dashboard:$COMMIT_SHA', '.']
+    args: [
+      'build',
+      '-t', 'gcr.io/$PROJECT_ID/gcp-release-notes-dashboard:$COMMIT_SHA',
+      '--build-arg', 'BACKEND_ENV_FILE=backend/.env.prod',
+      '--build-arg', 'FRONTEND_ENV_FILE=frontend/.env.production',
+      '--build-arg', 'GEMINI_API_KEY=${_GEMINI_API_KEY}',
+      '--build-arg', 'GEMINI_MODEL=${_GEMINI_MODEL}',
+      '.'
+    ]
   
   # Push the container image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
@@ -23,6 +31,31 @@ steps:
       - '--allow-unauthenticated'
       - '--port'
       - '5173'
+      - '--set-env-vars'
+      - 'NODE_ENV=production,PORT=5173,GEMINI_API_KEY=${_GEMINI_API_KEY},GEMINI_MODEL=${_GEMINI_MODEL},BIGQUERY_DATASET=raves_us,BIGQUERY_TABLE=release_notes,GOOGLE_CLOUD_PROJECT=$PROJECT_ID'
+      - '--concurrency'
+      - '80'
+      - '--cpu'
+      - '1'
+      - '--memory'
+      - '1Gi'
+      - '--min-instances'
+      - '1'
+  
+  # Test the deployment
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: /bin/bash
+    args:
+      - '-c'
+      - |
+        echo "Testing deployment..."
+        DEPLOYED_URL=$(gcloud run services describe gcp-release-notes-dashboard --region us-central1 --format='value(status.url)')
+        echo "Deployed URL: $DEPLOYED_URL"
+        echo "Testing static test page..."
+        curl -s "$DEPLOYED_URL/static-test" | grep "GCP Release Notes Dashboard"
+        echo "Testing debug endpoint..."
+        curl -s "$DEPLOYED_URL/debug" | jq '.frontendFiles | length'
+        echo "Deployment tests complete."
   
   # Create a latest tag
   - name: 'gcr.io/cloud-builders/docker'
@@ -35,5 +68,9 @@ steps:
 images:
   - 'gcr.io/$PROJECT_ID/gcp-release-notes-dashboard:$COMMIT_SHA'
   - 'gcr.io/$PROJECT_ID/gcp-release-notes-dashboard:latest'
+
+substitutions:
+  _GEMINI_API_KEY: 'your-api-key-here' # Set this in the Cloud Build trigger
+  _GEMINI_MODEL: 'gemini-1.5-pro'
 
 timeout: '1200s' 
