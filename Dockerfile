@@ -19,7 +19,7 @@ COPY . .
 
 # Use a build arg to specify the environment file to use
 ARG BACKEND_ENV_FILE=backend/.env.prod
-ARG FRONTEND_ENV_FILE=frontend/.env.example
+ARG FRONTEND_ENV_FILE=frontend/.env.production
 ARG GEMINI_API_KEY
 ARG GEMINI_MODEL
 
