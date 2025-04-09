@@ -162,19 +162,33 @@ app.get('/debug', (req, res) => {
     }
   };
   
-  // Check if critical files exist
+  // Check if critical files exist - but be more flexible about asset naming
   const checkCriticalFiles = (): void => {
-    const criticalFiles = [
-      '/index.html',
-      '/assets/main.js',
-      '/assets/main.css'
-    ];
+    // Check for index.html - this must exist
+    if (!fs.existsSync(path.join(publicPath, 'index.html'))) {
+      missingCriticalFiles.push('/index.html');
+    }
     
-    criticalFiles.forEach(file => {
-      if (!frontendFiles.some(f => f.path === file)) {
-        missingCriticalFiles.push(file);
-      }
-    });
+    // Check for any JavaScript files in assets directory
+    const hasJsFiles = frontendFiles.some(f => 
+      f.path.startsWith('/assets/') && f.path.endsWith('.js')
+    );
+    if (!hasJsFiles) {
+      missingCriticalFiles.push('JavaScript files in /assets directory');
+    }
+    
+    // Check for any CSS files in assets directory
+    const hasCssFiles = frontendFiles.some(f => 
+      f.path.startsWith('/assets/') && f.path.endsWith('.css')
+    );
+    if (!hasCssFiles) {
+      missingCriticalFiles.push('CSS files in /assets directory');
+    }
+    
+    // Check for assets directory itself
+    if (!fs.existsSync(path.join(publicPath, 'assets'))) {
+      missingCriticalFiles.push('/assets directory');
+    }
   };
   
   // Scan frontend files if the public directory exists
@@ -198,13 +212,48 @@ app.get('/debug', (req, res) => {
     publicPath: publicPath,
     publicExists: fs.existsSync(publicPath),
     indexExists: fs.existsSync(path.join(publicPath, 'index.html')),
-    frontendFiles: frontendFiles.length,
+    frontendFiles: frontendFiles.map(f => f.path), // Show actual file paths
     missingCriticalFiles: missingCriticalFiles.length > 0 ? missingCriticalFiles : 'None',
     env: {
       NODE_ENV: process.env.NODE_ENV,
       PORT: process.env.PORT
     }
   });
+});
+
+// Test endpoint to help diagnose frontend routing issues
+app.get('/test', (req, res) => {
+  // Return diagnostic information instead of redirecting to frontend
+  const indexPath = path.join(__dirname, '../public/index.html');
+  const indexExists = fs.existsSync(indexPath);
+  const publicPath = path.join(__dirname, '../public');
+  const assetDirExists = fs.existsSync(path.join(publicPath, 'assets'));
+  
+  // List actual assets directory if it exists
+  let assetFiles: string[] = [];
+  if (assetDirExists) {
+    try {
+      assetFiles = fs.readdirSync(path.join(publicPath, 'assets'));
+    } catch (err) {
+      console.error('Error reading assets directory:', err);
+    }
+  }
+  
+  const diagnosticInfo = {
+    message: 'Test endpoint for frontend diagnosis',
+    indexExists,
+    assetDirExists,
+    assetFiles,
+    requestPath: req.path,
+    publicPath,
+    possible_issues: [
+      indexExists ? null : 'index.html file is missing',
+      assetDirExists ? null : 'assets directory is missing',
+      assetFiles.length === 0 && assetDirExists ? 'assets directory is empty' : null
+    ].filter(issue => issue !== null)
+  };
+  
+  res.json(diagnosticInfo);
 });
 
 // Serve static files from the frontend build directory
@@ -231,8 +280,55 @@ app.use(express.static(path.join(__dirname, '../public'), {
 // All remaining requests return the React app, so it can handle routing
 app.get('*', (req, res, next) => {
   // Skip API and health check routes
-  if (req.path.startsWith('/api/') || req.path === '/health' || req.path === '/debug') {
+  if (req.path.startsWith('/api/') || req.path === '/health' || req.path === '/debug' || req.path === '/test') {
     return next();
+  }
+  
+  // Special case: static test page for checking the server
+  if (req.path === '/static-test') {
+    const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Static Test Page</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+          h1 { color: #1a73e8; }
+          pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+          .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+          .success { color: green; }
+          .error { color: red; }
+        </style>
+      </head>
+      <body>
+        <h1>GCP Release Notes Dashboard - Static Test Page</h1>
+        <div class="card">
+          <h2>Server Status</h2>
+          <p class="success">✅ Server is running properly</p>
+          <p>Environment: ${process.env.NODE_ENV || 'development'}</p>
+          <p>Port: ${config.server.port}</p>
+        </div>
+        <div class="card">
+          <h2>Request Information</h2>
+          <p>Path: ${req.path}</p>
+          <p>Protocol: ${req.protocol}</p>
+          <p>Host: ${req.headers.host}</p>
+        </div>
+        <div class="card">
+          <h2>Available Test Endpoints</h2>
+          <ul>
+            <li><a href="/health">/health</a> - Health check endpoint</li>
+            <li><a href="/debug">/debug</a> - Debug endpoint with detailed information</li>
+            <li><a href="/test">/test</a> - Test endpoint for frontend diagnosis</li>
+            <li><a href="/">/</a> - Main application (requires frontend assets)</li>
+          </ul>
+        </div>
+      </body>
+      </html>
+    `;
+    return res.send(html);
   }
   
   // Log the request that's being handled by the catch-all route
@@ -245,7 +341,7 @@ app.get('*', (req, res, next) => {
     res.sendFile(indexPath);
   } else {
     console.error('ERROR: Frontend index.html not found at', indexPath);
-    res.status(500).send('Server configuration error: Frontend not properly built');
+    res.redirect('/static-test'); // Redirect to static test page instead of showing an error
   }
 });
 

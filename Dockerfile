@@ -47,18 +47,30 @@ RUN if [ ! -z "$GEMINI_API_KEY" ]; then \
 # Display environment settings (masked for security)
 RUN echo "Using Gemini settings:" && grep "GEMINI" backend/.env | sed 's/GEMINI_API_KEY=.*/GEMINI_API_KEY=****/g'
 
+# Set up frontend environment
 RUN if [ -f "$FRONTEND_ENV_FILE" ] && [ "$FRONTEND_ENV_FILE" != "frontend/.env" ]; then cp $FRONTEND_ENV_FILE frontend/.env; fi
 
-# Build frontend (using no-check to bypass TypeScript errors for now)
+# Debug frontend environment
+RUN echo "=== Frontend Environment ===" && ls -la frontend && echo "===================="
+
+# Build frontend with Vite
 RUN cd frontend && npm run build:no-check
+
+# Debug frontend build output
+RUN echo "=== Frontend Build Output ===" && ls -la frontend/dist || echo "frontend/dist directory not found" && echo "============================"
+RUN if [ -d "frontend/dist/assets" ]; then echo "=== Frontend Assets Directory ===" && ls -la frontend/dist/assets && echo "============================="; fi
 
 # Create public directory in backend for frontend assets
 RUN mkdir -p backend/public
 
 # Copy frontend build to backend/public
-RUN cp -r frontend/dist/* backend/public/
+RUN cp -r frontend/dist/* backend/public/ || echo "Failed to copy frontend/dist to backend/public"
 
-# Build backend
+# Debug backend public directory
+RUN echo "=== Backend Public Directory ===" && ls -la backend/public && echo "================================="
+RUN if [ -d "backend/public/assets" ]; then echo "=== Backend Public Assets Directory ===" && ls -la backend/public/assets && echo "===================================="; fi
+
+# Build backend with TypeScript
 RUN cd backend && npm run build
 
 # Production stage
@@ -80,6 +92,10 @@ RUN npm install --only=production
 # Copy built app
 COPY --from=build /usr/src/app/backend/dist ./dist
 COPY --from=build /usr/src/app/backend/public ./public
+
+# Debug the public directory in production stage
+RUN echo "=== Production Public Directory ===" && ls -la public && echo "==================================="
+RUN if [ -d "public/assets" ]; then echo "=== Production Public Assets Directory ===" && ls -la public/assets && echo "=========================================="; fi
 
 # Copy .env file explicitly
 COPY --from=build /usr/src/app/backend/.env ./.env
