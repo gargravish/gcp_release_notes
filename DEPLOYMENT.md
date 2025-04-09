@@ -175,9 +175,19 @@ If you encounter HTTPS-related issues in Cloud Run:
    - Check if your Cloud Run service is being accessed at the correct URL
    - Verify request headers in the application logs
    - Check the browser console for mixed content warnings
-   - Use the built-in `/debug` endpoint to check request and runtime information:
+   - Use the built-in debug endpoints to troubleshoot:
      ```bash
+     # Basic debug information (JSON format)
      curl https://gcp-release-notes-486097256786.us-central1.run.app/debug
+     
+     # Frontend-specific debug page (HTML format)
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/debug-frontend
+     
+     # Simple static HTML test page
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/test.html
+     
+     # Fallback page if frontend is not loading
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/fallback.html
      ```
    - Examine detailed logs for redirect handling:
      ```bash
@@ -188,6 +198,12 @@ If you encounter HTTPS-related issues in Cloud Run:
      gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Serving static file'"
      ```
    - If you see issues with the frontend assets, check the build process in your Dockerfile to ensure the static files are correctly copied to the backend/public directory
+   - For persistent frontend issues, try the following:
+     1. Clear your browser cache completely (Ctrl+Shift+Delete or Cmd+Shift+Delete)
+     2. Try accessing the app in an incognito/private window
+     3. Try a different browser entirely
+     4. Check the network tab in browser developer tools for any failed asset loads
+     5. If on a corporate network, check if any content policies might be affecting the app
 
 5. **Rate Limiting Issues**
    - The application uses express-rate-limit to prevent abuse
@@ -287,9 +303,19 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
    - Check if your Cloud Run service is being accessed at the correct URL
    - Verify request headers in the application logs
    - Check the browser console for mixed content warnings
-   - Use the built-in `/debug` endpoint to check request and runtime information:
+   - Use the built-in debug endpoints to troubleshoot:
      ```bash
+     # Basic debug information (JSON format)
      curl https://gcp-release-notes-486097256786.us-central1.run.app/debug
+     
+     # Frontend-specific debug page (HTML format)
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/debug-frontend
+     
+     # Simple static HTML test page
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/test.html
+     
+     # Fallback page if frontend is not loading
+     curl https://gcp-release-notes-486097256786.us-central1.run.app/fallback.html
      ```
    - Examine detailed logs for redirect handling:
      ```bash
@@ -300,6 +326,12 @@ docker run -d -p 5173:5173 --restart unless-stopped gcp-release-notes-dashboard:
      gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=gcp-release-notes AND textPayload:'Serving static file'"
      ```
    - If you see issues with the frontend assets, check the build process in your Dockerfile to ensure the static files are correctly copied to the backend/public directory
+   - For persistent frontend issues, try the following:
+     1. Clear your browser cache completely (Ctrl+Shift+Delete or Cmd+Shift+Delete)
+     2. Try accessing the app in an incognito/private window
+     3. Try a different browser entirely
+     4. Check the network tab in browser developer tools for any failed asset loads
+     5. If on a corporate network, check if any content policies might be affecting the app
 
 5. **Rate Limiting Issues**
    - The application uses express-rate-limit to prevent abuse
